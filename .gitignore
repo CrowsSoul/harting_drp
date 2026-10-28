@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.python/
+
+# 模型缓存（可重新生成，勿提交）
+.cache/
+
+# 运行产物
+findings.json
+findings_*.json
+eval*.json
+*.eval.json
+f.json
+*.model.json.bak
+
+# 平台 Web 运行时数据与前端依赖
+nxdrp/checkers/platform_web/runtime/
+node_modules/
+
+# 报告归档
+report_archives/
+
+# 编辑器
+.vscode/
+.idea/
+
+# Claude Code（个人配置，不入库）
+CLAUDE*.md
+.claude/

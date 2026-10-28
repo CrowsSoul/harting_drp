@@ -1,0 +1,11 @@
+# 平台核心（nxdrp/contracts、pipeline、registry、电气安规/注塑/装配/钣金/机加工 检查器）
+# 只需要 Python 3.12+ 标准库，无需安装任何第三方包。
+#
+# 以下依赖只有 Web 平台、报告与知识库两个模块需要。
+# 不装也能跑检查和单元测试（平台 测试跳过、报告 只跳过导出相关用例）。
+
+-r nxdrp/checkers/platform_web/requirements.txt
+-r nxdrp/checkers/report/requirements.txt
+
+# 测试额外依赖（报告导出链路的 PDF 结构校验）
+pypdf>=5.0

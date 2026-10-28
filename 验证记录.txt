@@ -1,0 +1,108 @@
+合并版验证记录
+生成时间: 2026-10-28 10:18:25
+Python: 3.12.14
+
+===== 1) 检查项注册 =====
+  SAF-03   安规不合规归集             v1.0.0   电气安规 宋馨雨        nxdrp.checkers.electrical_safety.saf03_compliance.SafetyComplianceChecker
+  SAF-04   安规量化建议              v1.0.0   电气安规 宋馨雨        nxdrp.checkers.electrical_safety.saf04_suggestion.SafetySuggestionChecker
+
+覆盖率（对照 catalog）
+──────────────────────────────────────────────────────────────────────────────
+已实现 44 / 44
+  电气安规    4/4  ████████████████████
+  注塑   11/11 ████████████████████
+  装配    7/7  ████████████████████
+  性能预测    2/2  ████████████████████
+  机加工   12/12 ████████████████████
+  钣金   8/8  ████████████████████
+
+===== 2) 全量测试 =====
+Ran 312 tests in 23.601s
+
+OK
+
+
+===== 3) 全量自检（尾部） =====
+  执行        : ✓ SAF-03   skipped      缺少电气间隙和爬电路径输入
+  执行        : ✓ SAF-04   skipped      缺少电气间隙和爬电路径输入
+  结果        : 7 条 finding
+  期望        : ✓ DFM-31 期望 2 条，实际 2 条
+  期望        : ✓ DFM-32 期望 1 条，实际 1 条
+  期望        : ✓ DFM-02 期望 1 条，实际 1 条
+──────────────────────────────────────────────────────────────────────────────
+自检通过 ✓
+
+===== 4) 13 个 Mock 模型：全模块跑一遍 =====
+模型                            条数   ok  skip    缺数据    异常
+asm_test                      20   25    19      0     0
+board_a                        7   20    23      1     0
+bosses                         5   13    18     13     0
+deep_slot                     11   13     6     25     0
+demo_asm                      71   25    19      0     0
+demo_edge                     42   25    19      0     0
+demo_large                   240   25    19      0     0
+demo_normal                   50   25    19      0     0
+minimal                        2   16    18     10     0
+pcb_standoff                   4   10    12     22     0
+plate_holes                   14   17    14     13     0
+pressure_port                 10   20    12     12     0
+thin_wall                      9   13     6     25     0
+
+合计 checker 异常: 0
+
+===== 5) 评测框架（board_a 标注集） =====
+
+评测：board_a
+──────────────────────────────────────────────────────────────────────────────
+  标注 6 条（正样本 4 / 负样本 2）
+  预测 7 条
+──────────────────────────────────────────────────────────────────────────────
+检查项        标注  TP  FP  FN       P       R      F1
+------------------------------------------------------
+DFM-02      1   1   0   0   1.000   1.000   1.000
+DFM-31      2   2   0   0   1.000   1.000   1.000
+DFM-32      1   1   0   0   1.000   1.000   1.000
+------------------------------------------------------
+合计          4   4   0   0   1.000   1.000   1.000
+
+整体
+──────────────────────────────────────────────────────────────────────────────
+  macro-F1      : 1.000
+  精确率 / 召回 : 1.000 / 1.000
+  误报率        : 0.000
+  无标注、未计分: DFM-20, DFM-22, PERF-01
+
+已写出 eval.json
+
+
+===== 6) 真实 NX 解析与比对（NX 2606） =====
+model_id    : plate_holes
+  nx_version  : v2606
+  faces       : 10
+  edges       : 20
+  耗时        : 31.2s
+按检查项统计 fresh     : {'DFM-13': 4, 'DFM-22': 4, 'DFM-27': 1, 'DFM-31': 4, 'DFM-33': 1}
+按检查项统计 committed : {'DFM-13': 4, 'DFM-22': 4, 'DFM-27': 1, 'DFM-31': 4, 'DFM-33': 1}
+逐项一致: True
+消息文本一致: True
+
+
+===== 7) Web 平台端到端（真实 uvicorn + 真实 报告 provider） =====
+前端首页        : HTTP 200，431 字节（Vue 应用）
+健康检查        : status=ok nx_available=True report_available=True workers=4
+规则库          : v0.4，44 条
+上传模型        : board_a.model.json -> 792efcc48818417d837d6cec40c17479
+任务            : state=completed，耗时 1078 ms
+检查结果        : 7 条；状态 ok=20, skipped=23, missing_data=1
+报告（PDF）  : 483375 字节，文件头 %PDF
+
+===== 8) 报告单独出报告（plate_holes 样例） =====
+报告目录      : 20261028T102009-1835871a5a4b
+问题条数      : 14
+44 项覆盖     : catalog=44，已执行=17，无问题=12，有问题项=5，未执行=0
+严重度分布    : P0=0 P1=4 P2=10 P3=0
+导出文件      : acceptance.json, archive.zip, finding-0001.png, finding-0002.png, finding-0003.png, finding-0004.png, finding-0005.png, finding-0006.png, finding-0007.png, finding-0008.png, finding-0009.png, finding-0010.png, finding-0011.png, finding-0012.png, finding-0013.png, finding-0014.png, image_evidence.json, knowledge_snapshot.json, manifest.json, model.json, quality.json, report.docx, report.html, report.json, report.pdf, rules.json, source_findings.json, source_mesh.stl
+问题定位图    : 14 张（images/finding-*.png）
+PDF 大小      : 630 KB；DOCX 419 KB；ZIP 1752 KB
+验收清单      : acceptance.json 存在=True；图片追溯=True
+

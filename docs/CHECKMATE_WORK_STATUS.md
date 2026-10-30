@@ -1,7 +1,7 @@
 # Check-Mate 规则复刻 — 任务进度记录
 
 > 分支：`feat/nx-checkmate-cae-rule-replication`（V2 主线 C 的 DFM 部分）
-> 最近更新：2026-10-30（W1 + W2 完成：机加工 12 项全部迁移）
+> 最近更新：2026-10-31（W1~W3 完成：机加工 12 项 + 注塑 11 项全部迁移）
 
 ## 一、任务与范围
 
@@ -9,7 +9,8 @@
 规则里写表达式、单位、舍入、例外与出处，checker 只保留几何测量；
 再按新规则重构 DFM 检查插件（PERF 部分另线推进）。
 
-本记录覆盖 **W1 + W2**：规则模型 v2 + 表达式引擎 + 机加工 12 项（DFM-27~38）全部迁移。
+本记录覆盖 **W1~W3**：规则模型 v2 + 表达式引擎 + 机加工 12 项（DFM-27~38）
++ 注塑 11 项（DFM-08~18）全部迁移（共 23/38 项）。
 
 ## 二、W1 完成清单
 
@@ -36,6 +37,17 @@
 | 14 | 新增表达式语义单测（布尔型 case、nearest 参数覆盖、单位） | ✅ | `tests/test_expr_machining.py`（14 例） |
 | 15 | 双跑对账（12 项全量） | ✅ | 13 个模型零差异；对账工具改为数值容差匹配（消除二次舍入假差异） |
 | 16 | 全量单测 | ✅（1 项环境性失败） | 386 项：385 通过 / 1 失败（同第四节） |
+
+## 二·C W3 完成清单（注塑 11 项）
+
+| # | 工作项 | 状态 | 证据 |
+|---|---|---|---|
+| 17 | 引擎扩展：case 可省略 measured（布尔型判定） | ✅ | `nxdrp/expr/cases.py`；引擎单测 51 例 |
+| 18 | DFM-08~18 双路径迁移（含 `table()` 材料查表、`if()` 选倍率） | ✅ | 11 个 checker；`rules/dfm_default.json` v0.7 |
+| 19 | 11 份取证文档（Check-Mate 有/无对应项的差异清单） | ✅ | `docs/checkmate_evidence/DFM-08~18.md` |
+| 20 | 注塑 v2 单测（新旧等价 33 个模型 + 语义断言） | ✅ | `tests/test_expr_injection.py`（8 例） |
+| 21 | 双跑对账（注塑 11 项） | ✅ | 13 个 mock 模型零差异；DFM-11 单位修正单独记录 |
+| 22 | 全量单测 | ✅（1 项环境性失败） | 395 项：394 通过 / 1 失败（同第四节） |
 
 ## 三、关键结论
 
@@ -64,7 +76,26 @@
 | DFM-38 孔进出刀面 | 入/出刀边非圆弧即失败 | 孔口面与孔轴夹角 > 5° | low（判据不同） |
 
 差异清单已逐条写入各证据文档，**未擅自改动工艺阈值**——待工艺负责人确认。
-需要黑盒样本的项（DFM-28/32/37 等）在 W3 前后用参数化试验件补齐。
+需要黑盒样本的项（DFM-28/32/37 等）在后续用参数化试验件补齐。
+
+### 2·B 注塑 11 项取证结论
+
+| 规则 | Check-Mate 对应 | 我方实现 | 置信度 |
+|---|---|---|---|
+| DFM-08 最小壁厚 | **无** | 材料表查值 × 临界倍率（P1 升级） | low |
+| DFM-09 均匀壁厚 | **无** | 偏离面积占比 > 25% | low |
+| DFM-10 壁厚变化 | **无** | 相邻变化率 > 25% | low |
+| DFM-11 加强筋 | **无** | 筋根/壁厚、筋高/根厚两级（单位修正为比值） | low |
+| DFM-12 模具壁厚 | **无** | 特征中心距 − 外包半宽 | low |
+| DFM-13 拔模角 | `dfms_MinimumDraftAngle`（腔 2°/芯 1°）+ `mw_check_draft_angle.dfa`（3°、cross 5°） | `< 0.5°`（容差可配） | medium |
+| DFM-14 倒扣 | `dfms_UndercutDetection` + `mw_check_undercut_area.dfa` | 上游特征记录 + 深度门槛 | medium |
+| DFM-15 凸台设计 | **无** | 四类问题取最不利 | low |
+| DFM-16 圆角半径 | `dfms_StandardCornerRadius`（标准半径，口径参考） | 内/外倍率 × 名义壁厚 | low |
+| DFM-17 多抽芯方向 | **无**（`draft_dirs` 概念相近） | 方向聚类数 > 1 | low |
+| DFM-18 尖角 | `mqc_pdq_sharp_edge_angle.dfa`（0.5°） | 二面角 < 60°（容差可配） | medium |
+
+注塑域在 Check-Mate DFM Advisor 中**大部分没有对应检查器**（壁厚/筋/凸台/抽芯方向），
+已如实标注 low；有对应项的（拔模/倒扣/尖角）逐条记录差异，未擅自改阈值。
 
 ### 3. 回归结论
 
@@ -85,8 +116,8 @@
 | 阶段 | 内容 | 前置 |
 |---|---|---|
 | ~~W2 机加其余 9 项~~ | ✅ 已完成（2026-10-30）：`nearest()`、9 项迁移、9 份证据、零差异对账 | — |
-| W3 注塑 11 项 | `table()` 材料查表、容差模式；对照 `TOOLING_BASE\dfa\mw_check_*.dfa` 与 `dfms_MinimumDraftAngle` 等；顺带补机加黑盒试验件（`f_slot_sweep` 等） | W2 |
-| W4 钣金 8 项 | 公式阈值（`3t + R` 类）；对照 `checkmate\dfa\checker\sheet_metal\mqc_dfm_*.dfa` | W3 |
+| ~~W3 注塑 11 项~~ | ✅ 已完成（2026-10-31）：`table()`/`if()`/可选 measured、11 项迁移、11 份证据、零差异对账 | — |
+| W4 钣金 8 项 | 公式阈值（`3t + R` 类）；对照 `checkmate\dfa\checker\sheet_metal\mqc_dfm_*.dfa`；顺带补机加/注塑黑盒试验件（`f_slot_sweep` 等） | W3 |
 | W5 装配 7 项 | 布尔/几何谓词；对照 `dfa\checker\assemblies` 与 `dfms_Fastener*` | W4 |
 
 ## 六、复现命令
@@ -95,9 +126,9 @@
 # 单测
 python -m unittest discover -s tests
 
-# 双跑对账（13 个 mock 模型，零差异；机加 12 项全量）
+# 双跑对账（13 个 mock 模型，零差异；机加 12 + 注塑 11 全量）
 python tools/checkmate/reconcile_verdicts.py --model mockdata/models \
-    --no-expression-for DFM-27,DFM-28,DFM-29,DFM-30,DFM-31,DFM-32,DFM-33,DFM-34,DFM-35,DFM-36,DFM-37,DFM-38
+    --no-expression-for DFM-08,DFM-09,DFM-10,DFM-11,DFM-12,DFM-13,DFM-14,DFM-15,DFM-16,DFM-17,DFM-18,DFM-27,DFM-28,DFM-29,DFM-30,DFM-31,DFM-32,DFM-33,DFM-34,DFM-35,DFM-36,DFM-37,DFM-38
 
 # Check-Mate 冒烟（fail / pass 两例）
 python tools/checkmate/run_checkmate.py smoke --checker dfms_DeepHoles

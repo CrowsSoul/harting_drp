@@ -287,6 +287,15 @@ class RuleEvaluationTests(unittest.TestCase):
         self.assertEqual(len(verdicts), 1)
         self.assertEqual(verdicts[0].measured, 0.0)
 
+    def test_case_may_omit_measured(self):
+        # 布尔型判定（如"存在倒扣即报"）：measured 留空
+        rule = StubRule(expression={"cases": [
+            {"when": "meas.has_depth == 0", "threshold": "params.min_depth"}]})
+        verdicts = evaluate_rule(rule, ctx(params={"min_depth": 0.5}, meas={"has_depth": 0}))
+        self.assertEqual(len(verdicts), 1)
+        self.assertIsNone(verdicts[0].measured)
+        self.assertEqual(verdicts[0].threshold, 0.5)
+
     def test_matched_case_with_missing_measured_raises(self):
         rule = StubRule(expression={"cases": [
             {"when": "meas.flag == 1", "measured": "meas.width"}]})

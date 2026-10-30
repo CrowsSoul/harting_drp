@@ -7,6 +7,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ...geom import angle_between_deg, norm
 from ._rules import injection_default_params
 from ._common import feature_face_ids, feature_location, undercut_features
@@ -29,6 +30,74 @@ class MultiPullDirectionChecker(BaseChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：抽芯方向数上限在 R-DFM-17 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        directions, tolerance = self._clusters(ctx)
+        try:
+            verdicts = ctx.evaluate({"direction_count": float(len(directions))})
+        except ExprMissingSymbol:
+            return []
+        if not verdicts:
+            return []
+        all_records = [r for group in directions for r in group["records"]]
+        part_ids = list(dict.fromkeys(str(r.get("part_id")) for r in all_records if r.get("part_id")))
+        face_ids = list(dict.fromkeys(fid for r in all_records for fid in feature_face_ids(r)))
+        location = feature_location(ctx, all_records[0])
+        findings = []
+        for verdict in verdicts:
+            findings.append(
+                ctx.finding(
+                    severity=verdict.severity,
+                    part_refs=part_ids,
+                    location=location,
+                    measured_value=verdict.measured,
+                    threshold_value=verdict.threshold,
+                    unit=verdict.unit or "方向",
+                    confidence=0.9,
+                    face_ids=face_ids,
+                    message=(
+                        f"倒扣需要 {len(directions)} 个独立抽芯方向："
+                        + ", ".join(str(tuple(round(x, 3) for x in d["direction"])) for d in directions)
+                    ),
+                    suggestion_text=(
+                        "合并同向倒扣并调整为单一滑块方向；无法合并时，"
+                        "按各方向分别增加斜顶/滑块机构并评估模具空间。"
+                    ),
+                    suggestion_delta={"target_pull_direction_count": 1},
+                    note=f"方向按夹角 {tolerance:.1f}° 聚类",
+                    extra={"directions": [list(d["direction"]) for d in directions]},
+                )
+            )
+        return findings
+
+    def _clusters(self, ctx: CheckContext):
+        tolerance = float(ctx.param("direction_cluster_angle_deg"))
+        directions = []
+        for rec in undercut_features(ctx):
+            if bool(rec.get("exempt") or rec.get("design_intent")):
+                continue
+            raw = rec.get("direction") or rec.get("draw_direction")
+            if not isinstance(raw, (list, tuple)) or len(raw) != 3:
+                continue
+            vec = norm(tuple(float(x) for x in raw))
+            if vec == (0.0, 0.0, 0.0):
+                continue
+            matched = False
+            for existing in directions:
+                if angle_between_deg(vec, existing["direction"]) <= tolerance:
+                    existing["records"].append(rec)
+                    matched = True
+                    break
+            if not matched:
+                directions.append({"direction": vec, "records": [rec]})
+        return directions, tolerance
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         tolerance = float(ctx.param("direction_cluster_angle_deg"))
         directions = []
         for rec in undercut_features(ctx):

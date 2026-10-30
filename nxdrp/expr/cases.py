@@ -32,7 +32,7 @@ class CaseVerdict:
     """一条命中的判定。checker 用它填 Finding 的 severity/measured/threshold/unit。"""
 
     severity: str
-    measured: float
+    measured: float | None      # case 可省略 measured（布尔型判定，如"存在即可"）
     threshold: float | None
     unit: str
     when: str
@@ -114,10 +114,13 @@ def evaluate_rule(rule: Any, ctx: SymbolContext) -> list[CaseVerdict]:
         if skip:
             return []
 
-        measured_source = case.get("measured", "meas.primary")
-        if not isinstance(measured_source, str) or not measured_source.strip():
-            raise ExprRuleError(f"cases[{index}].measured 必须是非空字符串")
-        measured = _number(measured_source, merged_ctx, "measured")
+        measured_source = case.get("measured")
+        if measured_source is None:
+            measured = None                      # 布尔型判定：Finding.measured_value 留空
+        elif isinstance(measured_source, str) and measured_source.strip():
+            measured = _number(measured_source, merged_ctx, "measured")
+        else:
+            raise ExprRuleError(f"cases[{index}].measured 必须是非空字符串或省略")
         threshold_source = case.get("threshold")
         threshold = (
             _number(threshold_source, merged_ctx, "threshold")
@@ -127,7 +130,8 @@ def evaluate_rule(rule: Any, ctx: SymbolContext) -> list[CaseVerdict]:
         rounding = case.get("rounding", getattr(rule, "rounding", None))
         if rounding is not None:
             digits = int(rounding)
-            measured = _round_half_away(measured, digits)
+            if measured is not None:
+                measured = _round_half_away(measured, digits)
             if threshold is not None:
                 threshold = _round_half_away(threshold, digits)
         severity = case.get("severity") or getattr(rule, "severity", "P2") or "P2"

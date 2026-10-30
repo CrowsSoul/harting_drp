@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "name": "dfm_default",
-  "version": "0.6",
-  "updated_at": "2026-10-30T10:29:10+08:00",
+  "version": "0.7",
+  "updated_at": "2026-10-30T14:31:42+08:00",
   "rules": [
     {
       "rule_id": "R-DFM-01",
@@ -150,11 +150,31 @@
         "min_inspect_area_mm2": 0.1,
         "critical_wall_ratio": 0.75
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 材料工艺基线 v0.2；待甲方材料库和厂标替换",
       "severity": "P1",
       "notes": "壁厚 < 材料最小壁厚（PC 1.5 / PA66 0.8 / PBT 0.8 …）",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.thickness < table(params.material_min_wall_thickness_mm, meas.material) * params.critical_wall_ratio",
+            "severity": "P1",
+            "measured": "meas.thickness",
+            "threshold": "table(params.material_min_wall_thickness_mm, meas.material)",
+            "note": "低于材料临界壁厚"
+          },
+          {
+            "when": "meas.thickness < table(params.material_min_wall_thickness_mm, meas.material)",
+            "measured": "meas.thickness",
+            "threshold": "table(params.material_min_wall_thickness_mm, meas.material)",
+            "note": "低于材料最小壁厚"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-08.md（材料最小壁厚表 × 临界倍率的项目基线）"
     },
     {
       "rule_id": "R-DFM-09",
@@ -172,11 +192,24 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 均匀壁厚基线 v0.2；待甲方外观件验收标准确认",
       "severity": "P2",
       "notes": "局部壁厚/名义壁厚超出 [0.8,1.25] 的面积占比 > 阈值",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.area_ratio > params.max_area_ratio",
+            "measured": "meas.area_ratio * 100",
+            "threshold": "params.max_area_ratio * 100",
+            "note": "超出名义壁厚的面积占比超限"
+          }
+        ]
+      },
+      "unit": "%",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-09.md（均匀壁厚面积占比的项目基线）"
     },
     {
       "rule_id": "R-DFM-10",
@@ -191,11 +224,24 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 壁厚过渡经验基线 v0.2",
       "severity": "P2",
       "notes": "相邻区域壁厚梯度超过允许变化率",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.ratio > params.max_gradient_ratio",
+            "measured": "meas.ratio * 100",
+            "threshold": "params.max_gradient_ratio * 100",
+            "note": "相邻壁厚变化率超限"
+          }
+        ]
+      },
+      "unit": "%",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-10.md（相邻壁厚变化率的项目基线）"
     },
     {
       "rule_id": "R-DFM-11",
@@ -214,11 +260,30 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 加强筋经验基线 v0.2；待甲方筋位设计规范确认",
       "severity": "P2",
       "notes": "筋根厚/名义壁厚 ≤ 0.5~0.6；筋高/根厚 ≤ 3~5",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.root_ratio > params.max_rib_root_to_wall_ratio",
+            "measured": "meas.root_ratio",
+            "threshold": "params.max_rib_root_to_wall_ratio",
+            "note": "筋根厚/壁厚超限"
+          },
+          {
+            "when": "meas.height_ratio > params.max_rib_height_to_root_ratio",
+            "measured": "meas.height_ratio",
+            "threshold": "params.max_rib_height_to_root_ratio",
+            "note": "筋高/根厚超限"
+          }
+        ]
+      },
+      "unit": "比值",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-11.md（加强筋基础设计的项目基线）"
     },
     {
       "rule_id": "R-DFM-12",
@@ -243,11 +308,24 @@
         "boss_cap_end_tolerance_mm": 0.5,
         "boss_cap_end_tolerance_ratio": 0.08
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目模具钢净厚经验基线 v0.2；待模具供应商复核",
       "severity": "P2",
       "notes": "筋与筋、凸台与凸台之间模具钢厚度 ≥ 阈值",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.steel_mm < params.min_mold_steel_thickness_mm",
+            "measured": "meas.steel_mm",
+            "threshold": "params.min_mold_steel_thickness_mm",
+            "note": "相邻特征间模具钢净厚不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-12.md（模具钢净厚的项目基线）"
     },
     {
       "rule_id": "R-DFM-13",
@@ -264,11 +342,24 @@
         "min_draft_angle_deg": 0.5,
         "angle_tolerance_deg": 1e-06
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 拔模经验基线 v0.2；开模方向须由工艺确认",
       "severity": "P1",
       "notes": "面法向与开模方向夹角 < 最小拔模角（0.5°~1°）",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.angle_deg < params.min_draft_angle_deg - params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "params.min_draft_angle_deg",
+            "note": "拔模角不足（含容差）"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumDraftAngle.html（cavity 2°/core 1°）与 TOOLING_BASE\\dfa\\mw_check_draft_angle.dfa（draft_angle 3.0、cross_angle 5.0）；证据 docs/checkmate_evidence\\DFM-13.md"
     },
     {
       "rule_id": "R-DFM-14",
@@ -279,11 +370,29 @@
       "params": {
         "min_undercut_depth_mm": 0.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "倒扣几何以 NX 特征分析/工艺确认为准",
       "severity": "P2",
       "notes": "沿开模方向存在遮挡（面在投影方向互相覆盖）",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.has_depth == 1 and meas.depth_mm >= params.min_undercut_depth_mm",
+            "measured": "meas.depth_mm",
+            "threshold": "params.min_undercut_depth_mm",
+            "note": "达到深度门槛的倒扣需模具动作"
+          },
+          {
+            "when": "meas.has_depth == 0",
+            "threshold": "params.min_undercut_depth_mm",
+            "note": "缺深度记录的倒扣，按存在即报"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_UndercutDetection.html 与 TOOLING_BASE\\dfa\\mw_check_undercut_area.dfa；证据 docs/checkmate_evidence\\DFM-14.md"
     },
     {
       "rule_id": "R-DFM-15",
@@ -315,11 +424,24 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 凸台经验基线 v0.2；待甲方结构设计规范确认",
       "severity": "P2",
       "notes": "凸台根部 R/壁厚、顶部厚度、凸台与侧壁距离",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.worst_measured < meas.worst_threshold",
+            "measured": "meas.worst_measured",
+            "threshold": "meas.worst_threshold",
+            "note": "凸台最不利尺寸低于要求"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-15.md（凸台壁厚/顶厚/根部圆角/侧壁距的项目基线）"
     },
     {
       "rule_id": "R-DFM-16",
@@ -335,11 +457,30 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 圆角经验基线 v0.2（内 R≥0.25t，外 R≥0.5t）",
       "severity": "P2",
       "notes": "内角缺 R 或 R<0.25t；外角 R<0.5t",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.has_radius == 1 and meas.radius_mm < if(meas.is_outer == 1, params.outer_radius_ratio, params.inner_radius_ratio) * meas.nominal_wall_mm",
+            "measured": "meas.radius_mm",
+            "threshold": "if(meas.is_outer == 1, params.outer_radius_ratio, params.inner_radius_ratio) * meas.nominal_wall_mm",
+            "note": "内/外圆角小于壁厚倍率要求"
+          },
+          {
+            "when": "meas.has_radius == 0",
+            "measured": "0",
+            "threshold": "if(meas.is_outer == 1, params.outer_radius_ratio, params.inner_radius_ratio) * meas.nominal_wall_mm",
+            "note": "角上缺少圆角"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardCornerRadius.html（标准半径系列，口径参考）；内/外圆角倍率为项目基线；证据 docs/checkmate_evidence\\DFM-16.md"
     },
     {
       "rule_id": "R-DFM-17",
@@ -350,11 +491,24 @@
       "params": {
         "direction_cluster_angle_deg": 15.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "抽芯方向来自倒扣特征分析，按 15°夹角聚类",
       "severity": "P2",
       "notes": "统计倒扣方向聚类，>1 个主方向则判定需多抽芯",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.direction_count > 1",
+            "measured": "meas.direction_count",
+            "threshold": "1",
+            "note": "倒扣需要多个独立抽芯方向"
+          }
+        ]
+      },
+      "unit": "方向",
+      "rounding": 0,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-17.md（抽芯方向聚类统计的项目基线；方向聚类见 dfms_UndercutDetection 的 draft_dirs 概念）"
     },
     {
       "rule_id": "R-DFM-18",
@@ -367,11 +521,24 @@
         "angle_tolerance_deg": 1e-06,
         "exempt_edge_ids": []
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 尖角经验基线 v0.2；设计意图边可配置豁免",
       "severity": "P2",
       "notes": "相邻面二面角 < 阈值（如 60°）且非设计意图",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.angle_deg < params.sharp_angle_deg - params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "params.sharp_angle_deg",
+            "note": "二面角过小形成尖角"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\pdq\\mqc_pdq_sharp_edge_angle.dfa（angle_tolerance 默认 0.5°）；证据 docs/checkmate_evidence\\DFM-18.md"
     },
     {
       "rule_id": "R-DFM-19",

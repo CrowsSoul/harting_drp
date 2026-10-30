@@ -9,6 +9,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding, Rule
+from ...expr import ExprMissingSymbol
 from ...geom import dot, sub
 from ._rules import injection_default_params
 from ._common import boss_features, feature_face_ids, feature_location, meta_features, pull_direction
@@ -70,6 +71,67 @@ class MoldWallThicknessChecker(BaseChecker):
         return records
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：模具钢净厚判定在 R-DFM-12 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        minimum = float(ctx.param("min_mold_steel_thickness_mm"))
+        pull = pull_direction(ctx)
+        records = self._feature_records(ctx)
+        findings: list[Finding] = []
+        for a, b in combinations(records, 2):
+            if a.get("part_id") != b.get("part_id"):
+                continue
+            la, lb = a["_location"], b["_location"]
+            delta = sub(lb, la)
+            axial = dot(delta, pull)
+            perpendicular = tuple(delta[i] - axial * pull[i] for i in range(3))
+            center_distance = sqrt(dot(perpendicular, perpendicular))
+            steel = center_distance - a["_width"] / 2.0 - b["_width"] / 2.0
+            try:
+                verdicts = ctx.evaluate({"steel_mm": steel})
+            except ExprMissingSymbol:
+                continue
+            part_id = str(a.get("part_id"))
+            part = ctx.part(part_id)
+            for verdict in verdicts:
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        part_refs=[part_id],
+                        location=tuple((la[i] + lb[i]) / 2.0 for i in range(3)),
+                        bbox=part.bbox if part else None,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        confidence=0.88 if all(v.get("origin") == "upstream_feature" for v in (a, b)) else 0.67,
+                        face_ids=list(dict.fromkeys(feature_face_ids(a) + feature_face_ids(b))),
+                        message=(
+                            f"相邻{a['_kind']}与{b['_kind']}之间模具钢净厚约 {float(verdict.measured):.2f} mm "
+                            f"< {minimum:.2f} mm"
+                        ),
+                        suggestion_text=(
+                            f"将两特征中心距增加至少 {-steel + minimum:.2f} mm，"
+                            f"或减小特征外包尺寸，使模具钢净厚达到 {minimum:.2f} mm。"
+                        ),
+                        suggestion_delta={
+                            "min_mold_steel_thickness_mm": minimum,
+                            "center_distance_delta_mm": round(max(0.0, minimum - steel), 3),
+                        },
+                        note="用特征中心距减两个外包宽度估算；中心可能为上游位置或圆柱轴线点",
+                        extra={
+                            "center_distance_mm": round(center_distance, 4),
+                            "feature_a": a["_kind"],
+                            "feature_b": b["_kind"],
+                        },
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         minimum = float(ctx.param("min_mold_steel_thickness_mm"))
         pull = pull_direction(ctx)
         records = self._feature_records(ctx)

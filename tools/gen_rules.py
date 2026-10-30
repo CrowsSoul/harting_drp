@@ -156,14 +156,82 @@ def build() -> RuleBook:
     )
 
 
-def main():
+def _merge(existing: RuleBook, generated: RuleBook) -> RuleBook:
+    """增量补骨架：已有规则原样保留（params/expression/unit/rounding/... 人工修订），
+    只为 catalog 里新增、规则库里还没有的检查项追加骨架。"""
+    known = existing.by_item()
+    rules = []
+    added = []
+    for rule in generated.rules:
+        keep = known.get(rule.check_item_id)
+        if keep is not None:
+            rules.append(keep)
+        else:
+            rule.version = existing.version       # 新骨架跟随规则库版本，不写死 0.1
+            rules.append(rule)
+            added.append(rule.check_item_id)
+    merged = RuleBook(
+        name=existing.name or generated.name,
+        version=existing.version,
+        updated_at=datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        rules=rules,
+    )
+    return merged, added
+
+
+def drift_report(existing: RuleBook) -> list[str]:
+    """参数骨架与规则库的分叉提示（只提示，不修改）。"""
+    lines = []
+    for item in catalog.CATALOG:
+        skeleton = PARAM_SKELETON.get(item.check_item_id)
+        rule = existing.get(item.check_item_id)
+        if skeleton is None or rule is None:
+            continue
+        extra = sorted(set(rule.params) - set(skeleton))
+        missing = sorted(set(skeleton) - set(rule.params))
+        if extra:
+            lines.append(f"{item.check_item_id}: JSON 有而 SKELETON 无的键 {extra}")
+        if missing:
+            lines.append(f"{item.check_item_id}: SKELETON 有而 JSON 无的键 {missing}")
+    return lines
+
+
+def main(argv=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="生成/补全规则库骨架（默认增量，不覆盖人工调参）")
+    parser.add_argument("--path", default=os.path.join(RULES_DIR, "dfm_default.json"))
+    parser.add_argument("--force", action="store_true", help="整本重写（会覆盖人工调参，先打印将被覆盖的规则）")
+    parser.add_argument("--dry-run", action="store_true", help="只打印结果，不写文件")
+    args = parser.parse_args(argv)
+
     os.makedirs(RULES_DIR, exist_ok=True)
-    book = build()
-    path = os.path.join(RULES_DIR, "dfm_default.json")
-    book.save(path)
+    generated = build()
+    book = generated
+    added: list[str] = []
+    if os.path.isfile(args.path):
+        existing = RuleBook.load(args.path)
+        if args.force:
+            print("--force：以下规则的现有内容将被覆盖：")
+            for rule in generated.rules:
+                old = existing.get(rule.check_item_id)
+                if old is not None and old.to_dict() != rule.to_dict():
+                    print(f"  {rule.check_item_id}")
+        else:
+            book, added = _merge(existing, generated)
+        drift = drift_report(existing)
+        if drift:
+            print("参数骨架分叉提示（仅提示，请人工同步 PARAM_SKELETON）：")
+            for line in drift:
+                print(f"  {line}")
+
+    if args.dry_run:
+        print(f"[dry-run] 将写出 {args.path}，规则 {len(book.rules)} 条，新增骨架 {added or '无'}")
+        return 0
+    book.save(args.path)
     book.validate()
-    print(f"已生成 {path}")
-    print(f"  规则条数: {len(book.rules)}")
+    print(f"已写出 {args.path}（版本 {book.version}）")
+    print(f"  规则条数: {len(book.rules)}；本次新增骨架: {added or '无'}")
     for mod, items in sorted(
         ((m, [i for i in catalog.CATALOG if i.owner_module == m]) for m in {i.owner_module for i in catalog.CATALOG})
     ):

@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "name": "dfm_default",
-  "version": "0.4",
-  "updated_at": "2026-10-28T10:10:00+08:00",
+  "version": "0.5",
+  "updated_at": "2026-10-30T10:18:47+08:00",
   "rules": [
     {
       "rule_id": "R-DFM-01",
@@ -262,7 +262,7 @@
           1
         ],
         "min_draft_angle_deg": 0.5,
-        "angle_tolerance_deg": 1e-6
+        "angle_tolerance_deg": 1e-06
       },
       "version": "0.2",
       "source_standard": "项目 DFM 拔模经验基线 v0.2；开模方向须由工艺确认",
@@ -364,7 +364,7 @@
       "enabled": true,
       "params": {
         "sharp_angle_deg": 60.0,
-        "angle_tolerance_deg": 1e-6,
+        "angle_tolerance_deg": 1e-06,
         "exempt_edge_ids": []
       },
       "version": "0.2",
@@ -516,11 +516,32 @@
         "min_hole_diameter_mm": 0.5,
         "max_hole_diameter_mm": 50.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：标准麻花钻经济深径比 ≤ 4；> 10 需深孔钻工艺",
       "severity": "P2",
       "notes": "孔深/孔径 > 4 报警示，> 10 升 P1；孔深取同轴孔组沿轴总跨度",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.ratio > params.very_deep_hole_ratio",
+            "severity": "P1",
+            "measured": "meas.ratio",
+            "threshold": "params.very_deep_hole_ratio",
+            "note": "超深孔：深径比超出深孔钻工艺范围"
+          },
+          {
+            "when": "meas.ratio > params.deep_hole_ratio",
+            "severity": "P2",
+            "measured": "meas.ratio",
+            "threshold": "params.deep_hole_ratio",
+            "note": "深孔：深径比超出标准麻花钻范围"
+          }
+        ]
+      },
+      "unit": "比值",
+      "rounding": 2,
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepHoles.html（L/D > ld_ratio_max，默认 5）与 NXCheckers.json#dfms_DeepHoles；取证与差异见 docs/checkmate_evidence/DFM-27.md"
     },
     {
       "rule_id": "R-DFM-28",
@@ -531,11 +552,25 @@
       "params": {
         "deep_slot_ratio": 3.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：槽深/槽宽 > 3~4 时排屑与刀具刚性急剧恶化",
       "severity": "P2",
       "notes": "粗筛版用对置内壁 + 共同槽底识别直槽，槽深取槽壁沿槽底法向的跨度",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.ratio > params.deep_slot_ratio",
+            "severity": "P2",
+            "measured": "meas.ratio",
+            "threshold": "params.deep_slot_ratio",
+            "note": "深窄槽：深宽比超出标准立铣刀可达范围"
+          }
+        ]
+      },
+      "unit": "比值",
+      "rounding": 2,
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotsDeepAndNarrow.html（D/W > depth_width_ratio_max，默认 4）与 NXCheckers.json#dfms_SlotsDeepAndNarrow；取证与差异见 docs/checkmate_evidence/DFM-28.md"
     },
     {
       "rule_id": "R-DFM-29",
@@ -640,11 +675,41 @@
           1.0
         ]
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：顶边圆角不小于标准刀具最小刀尖圆角（tool_library min_tool_radius_mm）",
       "severity": "P2",
       "notes": "粗筛版以最大平面为基准面，顶区（沿基准法向上 25%）的锐边/小圆角为候选",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.sharp_edge_count > 0",
+            "severity": "P2",
+            "measured": "0",
+            "threshold": "params.min_top_fillet_mm",
+            "unit": "mm",
+            "note": "顶区锐边：两平面直接相交，无圆角"
+          },
+          {
+            "when": "meas.radius < params.min_top_fillet_mm",
+            "severity": "P2",
+            "measured": "meas.radius",
+            "threshold": "params.min_top_fillet_mm",
+            "unit": "mm",
+            "note": "顶边圆角半径小于标准刀具最小刀尖圆角"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "exceptions": [
+        {
+          "when": "meas.exempt_edge == 1",
+          "skip": true,
+          "note": "装配贴合面等允许保留锐边的零件（模型 meta.sharp_edge_exempt_parts）"
+        }
+      ],
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_TopFillets.html 与 dfms_StandardCornerRadius.html（口径差异：NX 判'入口面带圆角'为失败，本项目判'缺圆角/圆角过小'）；差异清单见 docs/checkmate_evidence/DFM-33.md"
     },
     {
       "rule_id": "R-DFM-34",

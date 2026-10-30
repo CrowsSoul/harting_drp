@@ -374,9 +374,30 @@ class Rule:
     severity: str = "P2"
     notes: str = ""
     owner: str = ""
+    # ---- 规则模型 v2：Check-Mate 风格的"公式 + 比较规则"（全部带默认值，旧规则照常跑）----
+    #: 表达式判定配置，结构见 nxdrp/expr/cases.py；空 dict = 走旧 params 判定路径
+    expression: dict = field(default_factory=dict)
+    #: Finding.unit 的默认来源（case 内可覆盖）
+    unit: str = ""
+    #: 求值后回填 measured/threshold 的小数位；None = 各模块默认
+    rounding: int | None = None
+    #: 豁免子句：[{"when": "...", "skip": true} | {"when": "...", "severity_override": "P3"}]
+    exceptions: list[dict] = field(default_factory=list)
+    #: 判定口径出处（Check-Mate 规则路径/标准条款），复刻与审计用
+    reference: str = ""
+
+    @property
+    def has_expression(self) -> bool:
+        """是否带表达式判定。迁移期 checker 用它做新旧双路径开关。"""
+        return bool(self.expression and self.expression.get("cases"))
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        # v2 字段为空时不写进 JSON：老规则的文件形态保持不变，diff 只显示真正用到的规则
+        for key in ("expression", "unit", "rounding", "exceptions", "reference"):
+            if data.get(key) in ({}, "", None, []):
+                data.pop(key, None)
+        return data
 
     @classmethod
     def from_dict(cls, d) -> "Rule":
@@ -439,6 +460,13 @@ class RuleBook:
         for r in self.rules:
             if r.severity not in SEVERITIES:
                 problems.append(f"{r.check_item_id}: severity={r.severity!r} 非法")
+            if r.expression:
+                # 延迟导入：契约层不依赖引擎的加载顺序，坏规则在加载时被挡在门外
+                from ..expr import validate_expression
+
+                problems.extend(
+                    f"{r.check_item_id}: {p}" for p in validate_expression(r)
+                )
         if problems:
             raise ContractError("RuleBook 校验失败", problems)
 
@@ -656,6 +684,11 @@ def schema_documents() -> dict[str, dict]:
                             "params": {"type": "object"},
                             "source_standard": {"type": "string"},
                             "severity": {"enum": list(SEVERITIES)},
+                            "expression": {"type": "object"},
+                            "unit": {"type": "string"},
+                            "rounding": {"type": ["integer", "null"]},
+                            "exceptions": {"type": "array", "items": {"type": "object"}},
+                            "reference": {"type": "string"},
                         },
                     },
                 },

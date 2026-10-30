@@ -131,6 +131,50 @@ for f in ctx.faces("planar"):
         )
 ```
 
+### 写法 2.5：表达式判定（规则模型 v2，迁移中的新写法）
+
+判定公式与比较算子不再写在 checker 里，而是写进 `rules/*.json` 规则的
+`expression.cases`。checker 只负责**几何测量**，把测量量交给引擎：
+
+```python
+from nxdrp.expr import ExprMissingSymbol
+
+if ctx.rule.has_expression:
+    try:
+        for verdict in ctx.evaluate({"ratio": ratio, "span": span, "diameter": diameter}):
+            findings.append(emit_finding(
+                ctx,
+                severity=verdict.severity,          # 多级 severity 来自表达式
+                measured=verdict.measured,          # 已按 rule.rounding 舍入
+                threshold=verdict.threshold,        # 阈值本身可以是公式
+                unit=verdict.unit,
+                ...
+            ))
+    except ExprMissingSymbol:
+        continue                                    # 该特征缺数据 → 跳过，不猜
+else:
+    ...旧的"填参数、比阈值"路径原样保留（双跑对账用）...
+```
+
+规则库侧（`rules/dfm_default.json`）：
+
+```json
+"expression": {
+  "cases": [
+    {"when": "meas.ratio > params.very_deep_hole_ratio", "severity": "P1",
+     "measured": "meas.ratio", "threshold": "params.very_deep_hole_ratio"},
+    {"when": "meas.ratio > params.deep_hole_ratio", "severity": "P2",
+     "measured": "meas.ratio", "threshold": "params.deep_hole_ratio"}
+  ]
+}
+```
+
+- `cases` 按顺序求值，**首个命中生效**；都不命中就不报（"恰在阈值不报"）；
+- 变量只有 `params.x` 与 `meas.x` 两种写法；可用 `min/max/abs/round/if/table`；
+- `ExprUnitError`/`ExprTypeError` 是规则写错，不要捕获，让管线报 error；
+- 参考实现：`nxdrp/checkers/machining/dfm27_deep_hole.py`，
+  语法说明见 `nxdrp/expr/parser.py` 与 `docs/CHECKMATE_RULE_V2.md`。
+
 ### 写法 3：精确测距（间隙、干涉、爬电）
 
 **必须批量预取，绝不能逐对起 NX**——起一次 NX 约 30 秒。

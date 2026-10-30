@@ -23,6 +23,9 @@ node_modules/
 # 报告归档
 report_archives/
 
+# 取证过程中的本机原始数据（Siemens 规则原文、Check-Mate 日志、试验件），不入库
+.local/
+
 # 编辑器
 .vscode/
 .idea/

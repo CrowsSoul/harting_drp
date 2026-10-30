@@ -538,6 +538,33 @@
         },
         "owner": {
           "type": "string"
+        },
+        "expression": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "unit": {
+          "type": "string"
+        },
+        "rounding": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "reference": {
+          "type": "string"
         }
       },
       "required": [
@@ -551,7 +578,12 @@
         "source_standard",
         "severity",
         "notes",
-        "owner"
+        "owner",
+        "expression",
+        "unit",
+        "rounding",
+        "exceptions",
+        "reference"
       ]
     },
     "RuleBook": {

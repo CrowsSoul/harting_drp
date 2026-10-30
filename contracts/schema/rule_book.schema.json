@@ -53,6 +53,27 @@
               "P2",
               "P3"
             ]
+          },
+          "expression": {
+            "type": "object"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "rounding": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "reference": {
+            "type": "string"
           }
         }
       }

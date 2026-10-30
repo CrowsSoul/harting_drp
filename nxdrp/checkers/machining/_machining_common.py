@@ -786,13 +786,15 @@ def emit_finding(
     }
     if extra:
         payload.update(extra)
+    # 规则模型 v2：舍入位数以规则库为准；老规则沿用 4 位
+    digits = ctx.rule.rounding if ctx.rule.rounding is not None else 4
     return ctx.finding(
         severity=severity or ctx.rule.severity,
         message=message,
         part_refs=[part_id],
         location=location,
-        measured_value=round(float(measured), 4) if measured is not None else None,
-        threshold_value=round(float(threshold), 4) if threshold is not None else None,
+        measured_value=round(float(measured), digits) if measured is not None else None,
+        threshold_value=round(float(threshold), digits) if threshold is not None else None,
         unit=unit,
         confidence=round(confidence, 3),
         suggestion_text=suggestion,

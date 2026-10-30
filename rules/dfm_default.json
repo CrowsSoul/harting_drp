@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "name": "dfm_default",
-  "version": "0.7",
-  "updated_at": "2026-10-30T14:31:42+08:00",
+  "version": "0.8",
+  "updated_at": "2026-10-30T14:36:44+08:00",
   "rules": [
     {
       "rule_id": "R-DFM-01",
@@ -550,11 +550,24 @@
         "min_bend_radius_ratio": 0.5,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "内 R/料厚 t < 材料下限（冷轧钢 0.5~1.0）",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.radius < params.min_bend_radius_ratio * meas.thickness - 1e-9",
+            "measured": "meas.radius",
+            "threshold": "params.min_bend_radius_ratio * meas.thickness",
+            "note": "折弯内半径小于 R/t 下限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_bending_break_radius.dfa（standard_multiple_factor 0.1、deviation 1.1，口径差异见证据）；证据 docs/checkmate_evidence\\DFM-19.md"
     },
     {
       "rule_id": "R-DFM-20",
@@ -566,11 +579,24 @@
         "min_edge_distance_ratio": 1.5,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "孔边到板边距离 < 1.5t~2t",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.gap < params.min_edge_distance_ratio * meas.thickness - 1e-9",
+            "measured": "meas.gap",
+            "threshold": "params.min_edge_distance_ratio * meas.thickness",
+            "note": "孔边到板边净距不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToPartEdge.html（dist_thickness_ratio_min 默认 3）；证据 docs/checkmate_evidence\\DFM-20.md"
     },
     {
       "rule_id": "R-DFM-21",
@@ -582,11 +608,24 @@
         "min_hole_spacing_ratio": 2.0,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "相邻孔净距 < 2t",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.clear < params.min_hole_spacing_ratio * meas.thickness - 1e-9",
+            "measured": "meas.clear",
+            "threshold": "params.min_hole_spacing_ratio * meas.thickness",
+            "note": "孔间净距不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleSpacing.html（dist_thickness_ratio_min 默认 3）；证据 docs/checkmate_evidence\\DFM-21.md"
     },
     {
       "rule_id": "R-DFM-22",
@@ -598,11 +637,24 @@
         "min_hole_diameter_ratio": 1.0,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "冲孔直径 < 料厚",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.diameter < params.min_hole_diameter_ratio * meas.thickness - 1e-9",
+            "measured": "meas.diameter",
+            "threshold": "params.min_hole_diameter_ratio * meas.thickness",
+            "note": "孔径小于 t 的倍数下限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html（diam_thickness_ratio_min 默认 1）；证据 docs/checkmate_evidence\\DFM-22.md"
     },
     {
       "rule_id": "R-DFM-23",
@@ -614,11 +666,24 @@
         "min_slot_width_ratio": 1.2,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "槽宽 < 1.2t",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.width < params.min_slot_width_ratio * meas.thickness - 1e-9",
+            "measured": "meas.width",
+            "threshold": "params.min_slot_width_ratio * meas.thickness",
+            "note": "槽宽小于 t 的倍数下限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html 与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_size.dfa（截口最小尺寸）；证据 docs/checkmate_evidence\\DFM-23.md"
     },
     {
       "rule_id": "R-DFM-24",
@@ -631,11 +696,24 @@
         "bend_radius_override_mm": null,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "切口/孔到折弯线距离 < 3t + R",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.clear < params.bend_clearance_ratio * meas.thickness + meas.radius - 1e-9",
+            "measured": "meas.clear",
+            "threshold": "params.bend_clearance_ratio * meas.thickness + meas.radius",
+            "note": "孔边到折弯净距小于 3t+R"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToBend.html（dist_thickness_ratio_min 默认 3）与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_bending_distance.dfa；证据 docs/checkmate_evidence\\DFM-24.md"
     },
     {
       "rule_id": "R-DFM-25",
@@ -648,11 +726,24 @@
         "bend_radius_override_mm": null,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "翻边高 < 3t + R（否则边缘撕裂）",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.height < params.min_flange_height_ratio * meas.thickness + meas.radius - 1e-9",
+            "measured": "meas.height",
+            "threshold": "params.min_flange_height_ratio * meas.thickness + meas.radius",
+            "note": "翻边高度小于 3t+R"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumFlangeHeight.html（height_min 3 mm、height_thickness_ratio_min 3）；证据 docs/checkmate_evidence\\DFM-25.md"
     },
     {
       "rule_id": "R-DFM-26",
@@ -665,11 +756,30 @@
         "max_boss_height_ratio": 1.5,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "凸台高/t 超出允许区间",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.height < params.min_boss_height_ratio * meas.thickness - 1e-9",
+            "measured": "meas.height",
+            "threshold": "params.min_boss_height_ratio * meas.thickness",
+            "note": "凸台高度低于 h/t 下限"
+          },
+          {
+            "when": "meas.height > params.max_boss_height_ratio * meas.thickness + 1e-9",
+            "measured": "meas.height",
+            "threshold": "params.max_boss_height_ratio * meas.thickness",
+            "note": "凸台高度高于 h/t 上限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EmbossmentMaximumDepth.html（height_thickness_ratio_max 默认 5，口径差异见证据）；证据 docs/checkmate_evidence\\DFM-26.md"
     },
     {
       "rule_id": "R-DFM-27",

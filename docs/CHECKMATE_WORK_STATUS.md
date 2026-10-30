@@ -1,7 +1,7 @@
 # Check-Mate 规则复刻 — 任务进度记录
 
 > 分支：`feat/nx-checkmate-cae-rule-replication`（V2 主线 C 的 DFM 部分）
-> 最近更新：2026-10-31（W1~W3 完成：机加工 12 项 + 注塑 11 项全部迁移）
+> 最近更新：2026-10-31（W1~W4 完成：机加工 12 + 注塑 11 + 钣金 8 = 31/38 项）
 
 ## 一、任务与范围
 
@@ -9,8 +9,8 @@
 规则里写表达式、单位、舍入、例外与出处，checker 只保留几何测量；
 再按新规则重构 DFM 检查插件（PERF 部分另线推进）。
 
-本记录覆盖 **W1~W3**：规则模型 v2 + 表达式引擎 + 机加工 12 项（DFM-27~38）
-+ 注塑 11 项（DFM-08~18）全部迁移（共 23/38 项）。
+本记录覆盖 **W1~W4**：规则模型 v2 + 表达式引擎 + 机加工 12 项（DFM-27~38）
++ 注塑 11 项（DFM-08~18）+ 钣金 8 项（DFM-19~26）全部迁移（共 31/38 项）。
 
 ## 二、W1 完成清单
 
@@ -48,6 +48,16 @@
 | 20 | 注塑 v2 单测（新旧等价 33 个模型 + 语义断言） | ✅ | `tests/test_expr_injection.py`（8 例） |
 | 21 | 双跑对账（注塑 11 项） | ✅ | 13 个 mock 模型零差异；DFM-11 单位修正单独记录 |
 | 22 | 全量单测 | ✅（1 项环境性失败） | 395 项：394 通过 / 1 失败（同第四节） |
+
+## 二·D W4 完成清单（钣金 8 项）
+
+| # | 工作项 | 状态 | 证据 |
+|---|---|---|---|
+| 23 | DFM-19~26 双路径迁移（系数×料厚、3t+R 公式） | ✅ | 8 个 checker；`rules/dfm_default.json` v0.8 |
+| 24 | 8 份取证文档（含与 `dfms_PunchedHole*` 的阈值对照） | ✅ | `docs/checkmate_evidence/DFM-19~26.md` |
+| 25 | 钣金 v2 单测（新旧等价 14 个模型 + 语义断言） | ✅ | `tests/test_expr_sheet_metal.py`（6 例） |
+| 26 | 双跑对账（钣金 8 项） | ✅ | bent_sheet + 13 个 mock 模型零差异 |
+| 27 | 全量单测 | ✅（1 项环境性失败） | 401 项：400 通过 / 1 失败（同第四节） |
 
 ## 三、关键结论
 
@@ -97,6 +107,21 @@
 注塑域在 Check-Mate DFM Advisor 中**大部分没有对应检查器**（壁厚/筋/凸台/抽芯方向），
 已如实标注 low；有对应项的（拔模/倒扣/尖角）逐条记录差异，未擅自改阈值。
 
+### 2·C 钣金 8 项取证结论
+
+| 规则 | Check-Mate 对应 | 我方实现 | 置信度 |
+|---|---|---|---|
+| DFM-19 最小弯曲半径 | `mqc_dfm_check_bending_break_radius.dfa`（0.1t 标准倍数 ±10%） | `R < 0.5t` | medium（口径不同） |
+| DFM-20 孔到边缘 | `dfms_PunchedHoleToPartEdge`（3T） | `gap < 1.5t` | medium |
+| DFM-21 孔间距 | `dfms_PunchedHoleSpacing`（3T） | `clear < 2t` | medium |
+| DFM-22 孔径与料厚比 | `dfms_MinimumHoleDiameter`（1T） | `d < 1t` | **high（一致）** |
+| DFM-23 槽的最小宽度 | `dfms_MinimumHoleDiameter` + `mqc_dfm_check_cutout_size.dfa` | `width < 1.2t` | medium |
+| DFM-24 折弯与切口距离 | `dfms_PunchedHoleToBend`（3T） | `clear < 3t + R` | medium |
+| DFM-25 翻边高度 | `dfms_MinimumFlangeHeight`（3 mm 与 3T 双限） | `h < 3t + R` | medium |
+| DFM-26 冲压凸台高度 | `dfms_EmbossmentMaximumDepth`（5T 上限） | `h/t ∈ [0.6, 1.5]` | low（差异大） |
+
+钣金是 Check-Mate 覆盖最全的一域；DFM-22 公式与默认值完全一致，其余为阈值/测量差。
+
 ### 3. 回归结论
 
 - 新旧双路径在 13 个 mock 模型上判定零差异（severity / measured / threshold / unit / part / face 全字段）；
@@ -117,7 +142,8 @@
 |---|---|---|
 | ~~W2 机加其余 9 项~~ | ✅ 已完成（2026-10-30）：`nearest()`、9 项迁移、9 份证据、零差异对账 | — |
 | ~~W3 注塑 11 项~~ | ✅ 已完成（2026-10-31）：`table()`/`if()`/可选 measured、11 项迁移、11 份证据、零差异对账 | — |
-| W4 钣金 8 项 | 公式阈值（`3t + R` 类）；对照 `checkmate\dfa\checker\sheet_metal\mqc_dfm_*.dfa`；顺带补机加/注塑黑盒试验件（`f_slot_sweep` 等） | W3 |
+| ~~W4 钣金 8 项~~ | ✅ 已完成（2026-10-31）：8 项迁移、8 份证据、零差异对账 | — |
+| W5 装配 7 项 | 布尔/几何谓词；对照 `dfa\checker\assemblies` 与 `dfms_Fastener*`；顺带补黑盒试验件 | W4 |
 | W5 装配 7 项 | 布尔/几何谓词；对照 `dfa\checker\assemblies` 与 `dfms_Fastener*` | W4 |
 
 ## 六、复现命令
@@ -126,9 +152,9 @@
 # 单测
 python -m unittest discover -s tests
 
-# 双跑对账（13 个 mock 模型，零差异；机加 12 + 注塑 11 全量）
-python tools/checkmate/reconcile_verdicts.py --model mockdata/models \
-    --no-expression-for DFM-08,DFM-09,DFM-10,DFM-11,DFM-12,DFM-13,DFM-14,DFM-15,DFM-16,DFM-17,DFM-18,DFM-27,DFM-28,DFM-29,DFM-30,DFM-31,DFM-32,DFM-33,DFM-34,DFM-35,DFM-36,DFM-37,DFM-38
+# 双跑对账（13 个 mock 模型 + 钣金夹具，零差异；已迁移的 31 项全量）
+python tools/checkmate/reconcile_verdicts.py --model mockdata/models --model tests/fixtures/bent_sheet.model.json \
+    --no-expression-for DFM-08,DFM-09,DFM-10,DFM-11,DFM-12,DFM-13,DFM-14,DFM-15,DFM-16,DFM-17,DFM-18,DFM-19,DFM-20,DFM-21,DFM-22,DFM-23,DFM-24,DFM-25,DFM-26,DFM-27,DFM-28,DFM-29,DFM-30,DFM-31,DFM-32,DFM-33,DFM-34,DFM-35,DFM-36,DFM-37,DFM-38
 
 # Check-Mate 冒烟（fail / pass 两例）
 python tools/checkmate/run_checkmate.py smoke --checker dfms_DeepHoles

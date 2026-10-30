@@ -1,7 +1,7 @@
 # 规则模型 v2：Check-Mate 风格"公式 + 比较规则"
 
 > 适用分支：`feat/nx-checkmate-cae-rule-replication`（V2 主线 C）
-> 状态：W1 切片已落地——规则契约 v2 + 表达式引擎 + DFM-27/28/33 示范迁移
+> 状态：W1 + W2 已落地——规则契约 v2 + 表达式引擎 + **机加工 12 项（DFM-27~38）全部迁移**
 
 ## 一、为什么改
 
@@ -74,7 +74,8 @@ primary := NUMBER[mm|m|inch|deg|mm2|mm²]
 ```
 
 - **变量只有** `params.x`（合并后的规则参数）与 `meas.x`（checker 组装的测量量）两种写法；
-- **函数白名单**：`min` / `max` / `abs` / `round(x[,n])`（四舍五入）/ `if(cond,a,b)`（惰性，只算命中分支）/ `table(dict,key)`（材料查表）；
+- **函数白名单**：`min` / `max` / `abs` / `round(x[,n])`（四舍五入）/ `if(cond,a,b)`（惰性，只算命中分支）/
+  `table(dict,key)`（材料查表）/ `nearest(list,x)`（到标准系列最近元，DFM-31/34/36 用；空列表视为缺数据跳过）；
 - **单位**（轻量）：长度 mm/m/inch、角度 deg、面积 mm2、无单位=比值；
   加减比较需同量纲（无量纲字面量按另一侧单位解释），乘除按量纲白名单（长度×长度→面积、长度/长度→比值），
   结果统一归一到 mm/deg/mm2；变量单位可在 `expression.units` 里声明（`{"meas.radius": "mm"}`），未声明视为无量纲；
@@ -127,6 +128,6 @@ def check(self, ctx):
 
 - 引擎：`nxdrp/expr/`（tokenizer / parser / evaluator / units / cases / errors）
 - 集成：`nxdrp/checkers/base.py`（`ctx.evaluate`）、`nxdrp/checkers/machining/_machining_common.py`（舍入）
-- 示范：`nxdrp/checkers/machining/dfm27_deep_hole.py`、`dfm28_deep_narrow_slot.py`、`dfm33_top_fillet.py`
+- 迁移实现：`nxdrp/checkers/machining/dfm27~38*.py`（12 项）与 `nxdrp/checkers/examples/dfm31_*.py`、`dfm32_*.py`
 - 测试：`tests/test_expr_engine.py`、`tests/test_expr_rule_v2.py`、`tests/test_expr_machining.py`
 - 取证：`docs/checkmate_evidence/`、`tools/checkmate/`

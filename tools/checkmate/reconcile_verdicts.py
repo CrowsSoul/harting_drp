@@ -38,6 +38,19 @@ from nxdrp.registry import discover  # noqa: E402
 REGISTRY = discover()
 
 
+def _round_half_away(value: float, decimals: int) -> float:
+    """四舍五入（与规则引擎的 rounding 口径一致）。
+
+    不用 Python 内置 round：它是 banker's rounding，且二进制浮点在 x.xx5 边界上
+    会让旧路径（4 位）与新路径（2 位）展示出 0.01 的差，看起来像判定漂移。
+    """
+    import math
+
+    factor = 10.0 ** decimals
+    scaled = value * factor
+    return math.floor(abs(scaled) + 0.5) * (1.0 if scaled >= 0 else -1.0) / factor
+
+
 def _projection(result, decimals: int):
     rows = []
     for finding in result.findings:
@@ -45,14 +58,70 @@ def _projection(result, decimals: int):
             {
                 "check_item_id": finding.check_item_id,
                 "severity": finding.severity,
-                "measured": None if finding.measured_value is None else round(finding.measured_value, decimals),
-                "threshold": None if finding.threshold_value is None else round(finding.threshold_value, decimals),
+                "measured": None if finding.measured_value is None else _round_half_away(finding.measured_value, decimals),
+                "threshold": None if finding.threshold_value is None else _round_half_away(finding.threshold_value, decimals),
                 "unit": finding.unit,
                 "part_refs": list(finding.part_refs),
                 "face_ids": list(finding.evidence.face_ids),
             }
         )
     return sorted(rows, key=lambda r: json.dumps(r, ensure_ascii=False, sort_keys=True))
+
+
+def _row_key(row: dict) -> tuple:
+    """除 measured/threshold 外的判定口径字段。"""
+    return (
+        row["check_item_id"],
+        row["severity"],
+        row["unit"],
+        tuple(row["part_refs"]),
+        tuple(row["face_ids"]),
+    )
+
+
+def _numeric_key(row: dict):
+    return (row["measured"] if row["measured"] is not None else float("-inf"),
+            row["threshold"] if row["threshold"] is not None else float("-inf"))
+
+
+def _close(old: dict, new: dict, tol: float) -> bool:
+    for key in ("measured", "threshold"):
+        a, b = old[key], new[key]
+        if a is None or b is None:
+            if a != b:
+                return False
+        elif abs(a - b) > tol:
+            return False
+    return True
+
+
+def _compare_rows(old_rows: list[dict], new_rows: list[dict], tol: float):
+    """按口径字段分组、数值按容差匹配；返回 (仅旧, 仅新)。
+
+    容差取一个显示单位（默认 0.01）：旧路径先舍 4 位再展示、新路径直接按规则
+    rounding 舍入，正好落在 x.xx5 边界时会有 0.01 的二次舍入差，不算判定漂移。
+    """
+    old_groups: dict[tuple, list] = {}
+    new_groups: dict[tuple, list] = {}
+    for row in old_rows:
+        old_groups.setdefault(_row_key(row), []).append(row)
+    for row in new_rows:
+        new_groups.setdefault(_row_key(row), []).append(row)
+
+    only_old: list[dict] = []
+    only_new: list[dict] = []
+    for key in set(old_groups) | set(new_groups):
+        a_rows = sorted(old_groups.get(key, []), key=_numeric_key)
+        b_rows = sorted(new_groups.get(key, []), key=_numeric_key)
+        for index in range(max(len(a_rows), len(b_rows))):
+            if index >= len(a_rows):
+                only_new.append(b_rows[index])
+            elif index >= len(b_rows):
+                only_old.append(a_rows[index])
+            elif not _close(a_rows[index], b_rows[index], tol):
+                only_old.append(a_rows[index])
+                only_new.append(b_rows[index])
+    return only_old, only_new
 
 
 def _strip_expression(book: RuleBook, items: set[str]) -> RuleBook:
@@ -84,6 +153,8 @@ def main(argv=None) -> int:
     parser.add_argument("--no-expression-for", default="", help="在 baseline 上去掉这些 ID 的 expression（模拟旧路径）")
     parser.add_argument("--only", default="", help="只跑这些检查项（逗号分隔）")
     parser.add_argument("--decimals", type=int, default=2)
+    parser.add_argument("--tolerance", type=float, default=None,
+                        help="数值匹配容差（默认 = 一个显示单位，如 0.01）")
     parser.add_argument("--json", dest="json_out", default="", help="把差异清单写成 JSON")
     args = parser.parse_args(argv)
 
@@ -99,14 +170,12 @@ def main(argv=None) -> int:
         model = ModelBundle.load(path)
         old = _projection(run(model, baseline, REGISTRY, only=only), args.decimals)
         new = _projection(run(model, candidate, REGISTRY, only=only), args.decimals)
-        if old == new:
+        tol = args.tolerance if args.tolerance is not None else 1.0 / (10 ** args.decimals)
+        only_old, only_new = _compare_rows(old, new, tol)
+        if not only_old and not only_new:
             report["models"].append({"model": path, "findings": len(new), "differences": 0})
             print(f"[一致] {os.path.basename(path)}：{len(new)} 条 finding")
             continue
-        old_set = {json.dumps(r, ensure_ascii=False, sort_keys=True) for r in old}
-        new_set = {json.dumps(r, ensure_ascii=False, sort_keys=True) for r in new}
-        only_old = [json.loads(x) for x in sorted(old_set - new_set)]
-        only_new = [json.loads(x) for x in sorted(new_set - old_set)]
         report["ok"] = False
         report["models"].append(
             {"model": path, "findings": len(new), "differences": len(only_old) + len(only_new),

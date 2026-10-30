@@ -34,6 +34,8 @@ FUNCTIONS: dict[str, tuple[int, int | None]] = {
     "round": (1, 2),
     "if": (3, 3),
     "table": (2, 2),
+    # 集合最近值："到标准系列最近元"类判定（DFM-31/34/36）
+    "nearest": (2, 2),
 }
 
 COMPARE_OPS = (">", "<", ">=", "<=", "==", "!=")

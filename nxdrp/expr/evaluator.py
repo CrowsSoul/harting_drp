@@ -120,6 +120,21 @@ def _eval_call(call: ast.Call, ctx: SymbolContext) -> Any:
         raw = mapping[key]
         return _to_value(raw, "", "table", str(key))
 
+    if name == "nearest":
+        pool = _eval(call.args[0], ctx)
+        if not isinstance(pool, (list, tuple)):
+            raise ExprTypeError("nearest 的第一个参数必须是数值列表（如 params.standard_diameters）")
+        if not pool:
+            raise ExprMissingSymbol("nearest", "list")   # 空系列 = 缺数据，checker 跳过
+        value = _as_value(_eval(call.args[1], ctx), "nearest 的第二个参数")
+        numbers = []
+        for item in pool:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                raise ExprTypeError("nearest 的列表里只能有数值")
+            numbers.append(float(item))
+        best = min(numbers, key=lambda n: abs(n - value.number))
+        return Value(best, value.unit)
+
     args = [_as_value(_eval(arg, ctx), f"{name} 的参数") for arg in call.args]
     if name in ("min", "max"):
         numbers, unit = _unify(args, name)

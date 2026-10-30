@@ -15,6 +15,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -47,6 +48,72 @@ class AngularMillingChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：标准角系列判定在 R-DFM-36 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        standards = tool_values(ctx, "standard_angles_deg", "standard_plane_angles_deg", FALLBACK_PLANE_ANGLES)
+        findings = []
+        for part, base, face, angle in self._angular_faces(ctx):
+            try:
+                verdicts = ctx.evaluate(
+                    {"angle_deg": angle, "standard_angles_deg": standards}
+                )
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                target = float(verdict.threshold)
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=part.part_id,
+                        face_ids=[face.face_id, base.face_id],
+                        message=(
+                            f"【粗筛】零件 {part.part_id} 平面 {face.face_id} 与基准面 "
+                            f"{base.face_id} 夹角 {verdict.measured:.1f}°，非 90° 且不在标准角度系列内"
+                            f"（最近标准值 {target:.0f}°，偏差 {verdict.measured - target:+.1f}°）"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit or "deg",
+                        suggestion=(
+                            f"优先将该面改为与基准面垂直（90°）或标准角 {target:.0f}°；"
+                            f"若角度由功能决定，注明需角度头/斜垫铁装夹，并与工艺确认。"
+                        ),
+                        feature_kind="angular_face",
+                        confidence=0.4,
+                        location=face_point(face),
+                        extra={"base_face_id": base.face_id},
+                    )
+                )
+        return findings
+
+    def _angular_faces(self, ctx: CheckContext):
+        """几何层：基准面 + 逐平面夹角（新旧路径共用）。"""
+        min_area = nonnegative_number(ctx.param("min_face_area_mm2"))
+        min_area = 1.0 if min_area is None else min_area
+        bases = base_planes(ctx.model)
+        chamfer_face_ids = {c.face.face_id for c in extract_chamfers(ctx.model)}
+        for part in ctx.model.parts:
+            base = bases.get(part.part_id)
+            if base is None:
+                continue
+            n_base = face_normal(base)
+            if n_base is None:
+                continue
+            for face in ctx.faces(part.part_id, "planar"):
+                if face.face_id == base.face_id or face.face_id in chamfer_face_ids:
+                    continue
+                n = face_normal(face)
+                if n is None or (face.area is not None and face.area < min_area):
+                    continue
+                yield part, base, face, acute_angle_deg(n, n_base)
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         tol = nonnegative_number(ctx.param("angle_tolerance_deg"))
         tol = 1.0 if tol is None else tol
         min_area = nonnegative_number(ctx.param("min_face_area_mm2"))

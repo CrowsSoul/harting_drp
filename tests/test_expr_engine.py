@@ -132,6 +132,21 @@ class FunctionTests(unittest.TestCase):
         c = ctx(meas={"a": 1.0})
         self.assertEqual(num(evaluate_str("if(meas.a > 0, 1, meas.missing)", c)), 1.0)
 
+    def test_nearest(self):
+        c = ctx(meas={"d": 2.8, "series": [1.0, 2.0, 2.5, 3.0]})
+        self.assertEqual(num(evaluate_str("nearest(meas.series, meas.d)", c)), 3.0)
+        self.assertTrue(evaluate_str("abs(meas.d - nearest(meas.series, meas.d)) > 0.05", c))
+
+    def test_nearest_empty_list_is_missing_data(self):
+        c = ctx(meas={"d": 2.8, "series": []})
+        with self.assertRaises(ExprMissingSymbol):
+            evaluate_str("nearest(meas.series, meas.d)", c)
+
+    def test_nearest_requires_numeric_list(self):
+        c = ctx(meas={"d": 2.8, "series": "abc"})
+        with self.assertRaises(ExprTypeError):
+            evaluate_str("nearest(meas.series, meas.d)", c)
+
     def test_table_lookup(self):
         c = ctx(params={"table": {"PC": 1.5, "PBT": 0.8}}, meas={"material": "PC"})
         self.assertEqual(num(evaluate_str("table(params.table, meas.material)", c)), 1.5)

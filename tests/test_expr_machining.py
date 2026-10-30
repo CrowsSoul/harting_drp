@@ -17,7 +17,8 @@ from nxdrp.registry import discover
 
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "machining_syn.model.json"
 MODELS = REPO_ROOT / "mockdata" / "models"
-MIGRATED = ("DFM-27", "DFM-28", "DFM-33")
+#: 机加工 12 项全部走规则模型 v2（W1 迁移 3 项 + W2 迁移 9 项）
+MIGRATED = tuple(f"DFM-{i}" for i in range(27, 39))
 REGISTRY = discover()
 RULEBOOK = RuleBook.load(str(REPO_ROOT / "rules" / "dfm_default.json"))
 
@@ -38,21 +39,31 @@ def legacy_rulebook() -> RuleBook:
     return book
 
 
-def _round(value):
-    return None if value is None else round(value, 2)
-
-
 def verdicts(result):
     """Findings 的结构化投影：只比对判定口径，忽略文案。
 
-    measured/threshold 统一对齐到 2 位小数——v2 规则把 rounding=2 写进规则库，
-    展示精度从旧路径的 4 位变 2 位，这是规则声明的可审计变更，不是判定漂移。
+    measured/threshold 保留原始值；比较时允许 0.011 的显示舍入差——
+    v2 规则把 rounding 写进规则库，展示精度与舍入方式（四舍五入）可能与旧路径
+    （Python round，4 位）不同，这是规则声明的可审计变更，不是判定漂移。
     """
-    return sorted(
-        (f.check_item_id, f.severity, _round(f.measured_value), _round(f.threshold_value),
+    rows = [
+        (f.check_item_id, f.severity, f.measured_value, f.threshold_value,
          f.unit, tuple(f.part_refs), tuple(f.evidence.face_ids))
         for f in result.findings
-    )
+    ]
+    return sorted(rows, key=lambda r: (r[0], r[1], r[4], r[5], r[6], round(r[2] or 0, 1)))
+
+
+def assert_verdicts_equal(case: unittest.TestCase, old, new, label: str):
+    case.assertEqual(len(old), len(new), label)
+    for a, b in zip(old, new):
+        case.assertEqual(a[:2], b[:2], label)          # check_item_id / severity
+        case.assertEqual(a[4:], b[4:], label)          # unit / part_refs / face_ids
+        for x, y in ((a[2], b[2]), (a[3], b[3])):
+            if x is None or y is None:
+                case.assertEqual(x, y, label)
+            else:
+                case.assertAlmostEqual(x, y, delta=0.011, msg=label)
 
 
 # ---------------- 微型模型 ----------------
@@ -146,7 +157,7 @@ class EquivalenceTests(unittest.TestCase):
             with self.subTest(model=name):
                 new = run_items(model)
                 old = run_items(model, rulebook=legacy)
-                self.assertEqual(verdicts(old), verdicts(new), name)
+                assert_verdicts_equal(self, verdicts(old), verdicts(new), name)
 
 
 # ---------------- DFM-27 ----------------
@@ -202,6 +213,56 @@ class Dfm33ExpressionTests(unittest.TestCase):
         model = fillet_model(0.3)
         model.meta["sharp_edge_exempt_parts"] = ["P1"]
         self.assertEqual(len(run_items(model, ["DFM-33"]).findings), 1)
+
+
+# ---------------- W2：其余 9 项的表达式语义 ----------------
+class W2ExpressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.fixture = ModelBundle.load(str(FIXTURE))
+
+    def run_fixture(self, item, rulebook=None):
+        return run_items(self.fixture, [item], rulebook=rulebook)
+
+    def test_dfm29_boolean_case_without_threshold(self):
+        findings = self.run_fixture("DFM-29").findings
+        self.assertEqual(len(findings), 2)
+        for finding in findings:
+            self.assertIsNone(finding.threshold_value)   # 布尔型 case：无阈值
+            self.assertIsNotNone(finding.measured_value)
+            self.assertEqual(finding.unit, "mm")
+
+    def test_dfm30_boolean_case_without_threshold(self):
+        model = ModelBundle.load(str(MODELS / "demo_asm.model.json"))
+        findings = run_items(model, ["DFM-30"]).findings
+        self.assertEqual(len(findings), 3)
+        for finding in findings:
+            self.assertIsNone(finding.threshold_value)
+            self.assertTrue(finding.extra["blockers"])
+
+    def test_dfm31_tolerance_override_drives_expression(self):
+        # nearest() + 容差都来自规则参数：放宽容差后两条非标孔都变合规
+        book = RuleBook.load(str(REPO_ROOT / "rules" / "dfm_default.json"))
+        rule = book.get("DFM-31")
+        self.assertEqual(len(self.run_fixture("DFM-31", rulebook=book).findings), 2)
+        rule.params["tolerance_mm"] = 0.25
+        self.assertEqual(len(self.run_fixture("DFM-31", rulebook=book).findings), 0)
+
+    def test_dfm34_size_case_uses_mm_unit(self):
+        findings = self.run_fixture("DFM-34").findings
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].unit, "mm")           # 角度合格 → 命中尺寸 case
+        self.assertAlmostEqual(findings[0].threshold_value, 0.5)
+
+    def test_dfm36_threshold_is_nearest_standard_angle(self):
+        findings = self.run_fixture("DFM-36").findings
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].unit, "deg")
+        self.assertAlmostEqual(findings[0].threshold_value, 30.0)  # 20° 最近标准角
+
+    def test_dfm37_and_38_units(self):
+        self.assertEqual(self.run_fixture("DFM-37").findings[0].unit, "mm")
+        self.assertEqual(self.run_fixture("DFM-38").findings[0].unit, "deg")
 
 
 if __name__ == "__main__":

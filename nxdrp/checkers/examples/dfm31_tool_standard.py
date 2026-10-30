@@ -15,6 +15,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 
 #: 常用标准钻头/立铣刀直径（mm）。甲方若有厂内刀具库，应以规则参数覆盖这一组。
 DEFAULT_STANDARD_DIAMETERS = [
@@ -43,6 +44,60 @@ class ToolStandardChecker(BaseChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：到标准系列的隶属判定在 R-DFM-31 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        series = [float(x) for x in ctx.param("standard_diameters", DEFAULT_STANDARD_DIAMETERS)]
+        dmax = float(ctx.param("max_hole_diameter_mm", 20.0))
+        dmin = float(ctx.param("min_hole_diameter_mm", 0.5))
+
+        findings = []
+        for face in ctx.faces(face_type="cylindrical"):
+            raw = face.radius_diameter
+            if raw is None:
+                continue
+            diameter = raw * 2.0 if face.is_radius else raw
+            if diameter < dmin or diameter > dmax:
+                continue
+            try:
+                verdicts = ctx.evaluate(
+                    {"diameter": diameter, "standard_diameters": series}
+                )
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                nearest = float(verdict.threshold)
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        message=(
+                            f"孔直径 Ø{verdict.measured:.2f} 不在标准刀具系列内"
+                            f"（最近标准值 Ø{nearest:.1f}，偏差 {verdict.measured - nearest:+.2f} mm）"
+                        ),
+                        part_refs=[face.part_id],
+                        location=face.cog,
+                        bbox=face.bbox,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        confidence=0.9,
+                        face_ids=[face.face_id],
+                        suggestion_text=(
+                            f"将孔径改为 Ø{nearest:.1f}（标准刀具），或确认该孔为非标定制并承担刀具成本；"
+                            f"若为销孔/螺纹底孔，请以配合件为准并在此处豁免。"
+                        ),
+                        suggestion_delta={"diameter_mm": round(nearest, 3), "delta_mm": round(nearest - diameter, 3)},
+                        note="按标准刀具体系判定；甲方厂内刀具库应以规则参数覆盖",
+                        extra={"face_type": face.solid_face_type, "part_id": face.part_id},
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         series = [float(x) for x in ctx.param("standard_diameters", DEFAULT_STANDARD_DIAMETERS)]
         tol = float(ctx.param("tolerance_mm", 0.05))
         dmax = float(ctx.param("max_hole_diameter_mm", 20.0))

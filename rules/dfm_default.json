@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "name": "dfm_default",
-  "version": "0.5",
-  "updated_at": "2026-10-30T10:18:47+08:00",
+  "version": "0.6",
+  "updated_at": "2026-10-30T10:29:10+08:00",
   "rules": [
     {
       "rule_id": "R-DFM-01",
@@ -579,11 +579,23 @@
       "name": "平底盲孔",
       "enabled": true,
       "params": {},
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：钻尖底（约 118°）利于排屑，平底需立铣刀清底，增加工序",
       "severity": "P3",
       "notes": "孔组底部端面为平面判为平底盲孔；圆锥底面（钻尖）不报",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.flat_bottom_count > 0",
+            "measured": "meas.depth",
+            "note": "盲孔底部为平面（无钻尖角）"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FlatBottomHoles.html（盲孔平底即失败）；证据 docs/checkmate_evidence/DFM-29.md"
     },
     {
       "rule_id": "R-DFM-30",
@@ -595,11 +607,23 @@
         "tool_clearance_mm": 2.0,
         "envelope_length_mm": 40.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "二期项；占位粗筛：其他零件包围盒与刀具包络圆柱相交即疑似遮挡",
       "severity": "P2",
       "notes": "粗筛置信度低，真实可达性需扫掠实体求交（二期）",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.blocker_count > 0",
+            "measured": "meas.envelope_radius",
+            "note": "刀具包络与其他零件包围盒相交"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconvenientToolAccess.html（按铣削方向可见性判可达）；证据 docs/checkmate_evidence/DFM-30.md"
     },
     {
       "rule_id": "R-DFM-31",
@@ -637,11 +661,24 @@
         "max_hole_diameter_mm": 20.0,
         "min_hole_diameter_mm": 0.5
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "tool_library.json 钻头系列；甲方厂内刀具库到位后整表替换",
       "severity": "P2",
       "notes": "孔径/槽宽落在标准刀具系列（Φ1/2/3/4/5/6/8/10/12…）内；内置参考实现交付；孔径比对钻头系列，可用规则参数 standard_diameters 覆盖；槽宽比对立铣刀系列的扩展在平台合并时启用",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "abs(meas.diameter - nearest(meas.standard_diameters, meas.diameter)) > params.tolerance_mm",
+            "measured": "meas.diameter",
+            "threshold": "nearest(meas.standard_diameters, meas.diameter)",
+            "note": "孔径不在标准刀具系列内"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardHoleSizes.html（std_diameters 默认 0.75/1.6/2.5/3.3/4.2）；证据 docs/checkmate_evidence/DFM-31.md"
     },
     {
       "rule_id": "R-DFM-32",
@@ -654,11 +691,24 @@
         "cluster_tolerance_mm": 0.1,
         "min_radius_mm": 0.2
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：圆角种类 > 3 显著增加换刀次数",
       "severity": "P2",
       "notes": "底面圆角半径种类数 > N（换刀次数过多）；按零件统计回转圆角面半径聚类数",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.distinct_count > params.max_distinct_radii",
+            "measured": "meas.distinct_count",
+            "threshold": "params.max_distinct_radii",
+            "note": "回转圆角半径种类数超上限"
+          }
+        ]
+      },
+      "unit": "种",
+      "rounding": 0,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconsistentBottomRadius.html（底部圆角半径不一致即失败）；证据 docs/checkmate_evidence/DFM-32.md"
     },
     {
       "rule_id": "R-DFM-33",
@@ -721,11 +771,32 @@
         "angle_tolerance_deg": 5.0,
         "size_tolerance_mm": 0.1
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "tool_library.json 标准倒角角度/尺寸系列",
       "severity": "P2",
       "notes": "粗筛版以「与两个互垂平面相邻、法向约 45° 的小平面」识别倒角",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "abs(meas.angle_deg - nearest(meas.standard_angles_deg, meas.angle_deg)) > params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "nearest(meas.standard_angles_deg, meas.angle_deg)",
+            "unit": "deg",
+            "rounding": 1,
+            "note": "倒角角度不在标准系列"
+          },
+          {
+            "when": "meas.size_mm > 0 and abs(meas.size_mm - nearest(meas.standard_sizes_mm, meas.size_mm)) > params.size_tolerance_mm",
+            "measured": "meas.size_mm",
+            "threshold": "nearest(meas.standard_sizes_mm, meas.size_mm)",
+            "unit": "mm",
+            "rounding": 2,
+            "note": "倒角尺寸不在标准系列"
+          }
+        ]
+      },
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InternalChamfers.html（型腔底部内倒角即失败，口径差异见证据）；证据 docs/checkmate_evidence/DFM-34.md"
     },
     {
       "rule_id": "R-DFM-35",
@@ -736,11 +807,24 @@
       "params": {
         "min_corner_radius_mm": 0.5
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "二期项；粗筛：互垂内壁间圆角半径 < 标准刀具最小刀尖圆角即报",
       "severity": "P2",
       "notes": "未评估型腔深度（深腔才够不上刀具），真实判定需结合腔深（二期）",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.radius < params.min_corner_radius_mm",
+            "measured": "meas.radius",
+            "threshold": "params.min_corner_radius_mm",
+            "note": "内部转角圆角小于最小刀尖圆角"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepRadiusCorners.html（L/R > lr_ratio_max 默认 10，口径差异见证据）；证据 docs/checkmate_evidence/DFM-35.md"
     },
     {
       "rule_id": "R-DFM-36",
@@ -752,11 +836,24 @@
         "angle_tolerance_deg": 1.0,
         "min_face_area_mm2": 1.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "tool_library.json 标准平面角系列（0/30/45/60/90）",
       "severity": "P2",
       "notes": "以最大平面为基准，其余平面与基准夹角非标准即报；已识别为倒角的小面除外",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "abs(meas.angle_deg - nearest(meas.standard_angles_deg, meas.angle_deg)) > params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "nearest(meas.standard_angles_deg, meas.angle_deg)",
+            "note": "面与基准面夹角不在标准角度系列内"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 1,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_AngularMillingFaces.html（铣削轴与侧壁夹角，口径差异见证据）；证据 docs/checkmate_evidence/DFM-36.md"
     },
     {
       "rule_id": "R-DFM-37",
@@ -767,11 +864,24 @@
       "params": {
         "min_channel_width_mm": 1.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "二期项；粗筛：槽/通道宽 < 最小刀具直径（tool_library min_tool_diameter_mm）即报",
       "severity": "P2",
       "notes": "复用槽识别结果，未做空间遮挡分析（二期）",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.width < params.min_channel_width_mm",
+            "measured": "meas.width",
+            "threshold": "params.min_channel_width_mm",
+            "note": "通道宽度小于最小刀具直径"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_NarrowPassages.html（W < min_width_validation 默认 2.0）；证据 docs/checkmate_evidence/DFM-37.md"
     },
     {
       "rule_id": "R-DFM-38",
@@ -782,11 +892,24 @@
       "params": {
         "max_entry_angle_deg": 5.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：孔口面法向与孔轴夹角 > 5° 时钻头入刀易滑偏",
       "severity": "P2",
       "notes": "孔口面取孔组端部非内部端面；曲面孔口（无法向）暂不判定",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.angle_deg > params.max_entry_angle_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "params.max_entry_angle_deg",
+            "note": "孔口面与孔轴夹角过大"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 1,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EntryExitSurfaceForHoles.html（入/出刀边非圆弧即失败，口径差异见证据）；证据 docs/checkmate_evidence/DFM-38.md"
     },
     {
       "rule_id": "R-SAF-01",

@@ -12,6 +12,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -35,6 +36,60 @@ class FlatBottomBlindHoleChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：平底判据在 R-DFM-29 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        findings = []
+        for hole in extract_holes(ctx.model):
+            if hole.is_boss:
+                continue
+            for end in [item for item in hole.ends if item.kind == "bottom"]:
+                if _is_cone(end.face):
+                    continue
+                if end.face.solid_face_type != "planar" and end.face.normal is None:
+                    continue
+                try:
+                    verdicts = ctx.evaluate({"flat_bottom_count": 1, "depth": hole.depth})
+                except ExprMissingSymbol:
+                    continue
+                diameter = 2.0 * hole.r_min
+                point = face_point(end.face)
+                for verdict in verdicts:
+                    findings.append(
+                        emit_finding(
+                            ctx,
+                            severity=verdict.severity,
+                            part_id=hole.part_id,
+                            face_ids=hole.face_ids + [end.face.face_id],
+                            message=(
+                                f"【粗筛】零件 {hole.part_id} 盲孔（面 {'、'.join(hole.face_ids)}）"
+                                f"孔底为平面（底面 {end.face.face_id}），无钻尖角，"
+                                f"不利排屑且需额外清底工序（孔径 Ø{diameter:.2f}，孔深 {verdict.measured:.2f} mm）"
+                            ),
+                            measured=verdict.measured,
+                            threshold=verdict.threshold,
+                            unit=verdict.unit or "mm",
+                            suggestion=(
+                                "若结构无平底要求，改为钻尖底孔（约 118°）以省去清底工序；"
+                                "若必须平底，图纸注明用立铣刀清底并给出底面平面度要求，"
+                                "或改用锪钻一次成形。"
+                            ),
+                            feature_kind="hole_bottom",
+                            confidence=hole.confidence,
+                            location=point or hole.center,
+                            extra={
+                                "diameter_mm": round(diameter, 4),
+                                "bottom_face_id": end.face.face_id,
+                            },
+                        )
+                    )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         findings = []
         for hole in extract_holes(ctx.model):
             if hole.is_boss:

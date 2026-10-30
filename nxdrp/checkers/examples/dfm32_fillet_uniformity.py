@@ -13,6 +13,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ...geom import cluster_values
 
 
@@ -30,6 +31,66 @@ class FilletUniformityChecker(BaseChecker):
     }
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：种类数上限判定在 R-DFM-32 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        max_distinct = int(ctx.param("max_distinct_radii", 3))
+        tol = float(ctx.param("cluster_tolerance_mm", 0.1))
+        rmin = float(ctx.param("min_radius_mm", 0.2))
+
+        groups = self._groups(ctx, tol, rmin)
+        findings = []
+        for part_id, pairs, reps in groups:
+            try:
+                verdicts = ctx.evaluate({"distinct_count": float(len(reps))})
+            except ExprMissingSymbol:
+                continue
+            part = ctx.part(part_id)
+            for verdict in verdicts:
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        message=(
+                            f"零件 {part_id} 存在 {len(reps)} 种不同的回转圆角半径 "
+                            f"（{', '.join('R%.2f' % r for r in reps[:6])}{' …' if len(reps) > 6 else ''}），"
+                            f"超过允许的 {max_distinct} 种，会显著增加换刀次数"
+                        ),
+                        part_refs=[part_id],
+                        bbox=part.bbox if part else None,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "种",
+                        confidence=0.8,
+                        face_ids=[f.face_id for _, f in pairs][:20],
+                        suggestion_text=(
+                            f"将圆角半径归并到不超过 {max_distinct} 种标准值（建议 "
+                            f"{', '.join('R%.1f' % r for r in reps[:max_distinct])}），或与工艺确认哪些圆角可统一。"
+                        ),
+                        suggestion_delta={"distinct_radii_target": max_distinct},
+                        note="按回转面半径聚类统计；刀尖圆角与设计圆角需人工区分",
+                        extra={"radii": [round(r, 3) for r in reps]},
+                    )
+                )
+        return findings
+
+    def _groups(self, ctx: CheckContext, tol: float, rmin: float):
+        groups: dict[str, list] = {}
+        for face in ctx.faces(face_type="toroidal"):
+            radius = face.radius_diameter
+            if radius is None:
+                continue
+            radius = radius if face.is_radius else radius / 2.0
+            if radius < rmin:
+                continue
+            groups.setdefault(face.part_id, []).append((radius, face))
+        for part_id, pairs in groups.items():
+            yield part_id, pairs, cluster_values([r for r, _ in pairs], tol)
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         max_distinct = int(ctx.param("max_distinct_radii", 3))
         tol = float(ctx.param("cluster_tolerance_mm", 0.1))
         rmin = float(ctx.param("min_radius_mm", 0.2))

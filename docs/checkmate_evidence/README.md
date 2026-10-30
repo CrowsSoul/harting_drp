@@ -44,7 +44,7 @@ python tools/checkmate/run_checkmate.py smoke --checker dfms_DeepHoles --param l
 | 文件 | 内容 |
 |---|---|
 | `smoke.md` | 许可与环境冒烟结论（W1） |
-| `DFM-27.md` / `DFM-28.md` / `DFM-33.md` | 每条迁移规则的取证记录与差异清单 |
+| `DFM-27.md` ~ `DFM-38.md` | 机加工 12 条迁移规则的取证记录与差异清单（每条一份） |
 
 规则模型与迁移方法见 [`../CHECKMATE_RULE_V2.md`](../CHECKMATE_RULE_V2.md)，
 总体进度与已知问题见 [`../CHECKMATE_WORK_STATUS.md`](../CHECKMATE_WORK_STATUS.md)。

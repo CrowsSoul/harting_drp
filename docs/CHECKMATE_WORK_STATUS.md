@@ -1,7 +1,7 @@
 # Check-Mate 规则复刻 — 任务进度记录
 
 > 分支：`feat/nx-checkmate-cae-rule-replication`（V2 主线 C 的 DFM 部分）
-> 最近更新：2026-10-31（W1~W4 完成：机加工 12 + 注塑 11 + 钣金 8 = 31/38 项）
+> 最近更新：2026-10-31（W1~W5 完成：**38/38 项 DFM 全部公式化**）
 
 ## 一、任务与范围
 
@@ -9,8 +9,9 @@
 规则里写表达式、单位、舍入、例外与出处，checker 只保留几何测量；
 再按新规则重构 DFM 检查插件（PERF 部分另线推进）。
 
-本记录覆盖 **W1~W4**：规则模型 v2 + 表达式引擎 + 机加工 12 项（DFM-27~38）
-+ 注塑 11 项（DFM-08~18）+ 钣金 8 项（DFM-19~26）全部迁移（共 31/38 项）。
+本记录覆盖 **W1~W5**：规则模型 v2 + 表达式引擎 + 机加工 12 项（DFM-27~38）
++ 注塑 11 项（DFM-08~18）+ 钣金 8 项（DFM-19~26）+ 装配 7 项（DFM-01~07）
+全部迁移（**38/38**）。
 
 ## 二、W1 完成清单
 
@@ -58,6 +59,17 @@
 | 25 | 钣金 v2 单测（新旧等价 14 个模型 + 语义断言） | ✅ | `tests/test_expr_sheet_metal.py`（6 例） |
 | 26 | 双跑对账（钣金 8 项） | ✅ | bent_sheet + 13 个 mock 模型零差异 |
 | 27 | 全量单测 | ✅（1 项环境性失败） | 401 项：400 通过 / 1 失败（同第四节） |
+
+## 二·E W5 完成清单（装配 7 项）
+
+| # | 工作项 | 状态 | 证据 |
+|---|---|---|---|
+| 28 | DFM-01~07 双路径迁移（体积/间隙/对齐/紧固件三类） | ✅ | 7 个 checker；`rules/dfm_default.json` v0.9 |
+| 29 | 7 份取证文档（含 `dfms_Fastener*` / `HoleAlignment` 默认值对照） | ✅ | `docs/checkmate_evidence/DFM-01~07.md` |
+| 30 | 装配 v2 单测（22 个合成模型 + 13 个 mock 新旧等价、精确/粗筛 severity） | ✅ | `tests/test_expr_assembly.py`（6 例） |
+| 31 | 双跑对账（装配 7 项） | ✅ | 零差异 |
+| 32 | 全量单测 | ✅（1 项环境性失败） | 407 项：406 通过 / 1 失败（同第四节） |
+| 33 | **38/38 DFM 规则全部带 expression/unit/rounding/reference** | ✅ | 规则库 v0.9 |
 
 ## 三、关键结论
 
@@ -122,6 +134,18 @@
 
 钣金是 Check-Mate 覆盖最全的一域；DFM-22 公式与默认值完全一致，其余为阈值/测量差。
 
+### 2·D 装配 7 项取证结论
+
+| 规则 | Check-Mate 对应 | 我方实现 | 置信度 |
+|---|---|---|---|
+| DFM-01 干涉 | `dfms_ComponentInterference`（有干涉即失败） | 体积 > 0.01 mm³ | medium |
+| DFM-02 最小间隙 | **无直接对应** | 精确/粗筛两档，0.3 mm | low |
+| DFM-03 孔对齐 | `dfms_HoleAlignment`（1 mm 搜索、0 容差） | 0.1/0.1/1.0° | medium |
+| DFM-04 孔/槽对齐 | `dfms_SlotToHoleAlignment`（0.01 mm / 0.1°） | 0.2 mm / 1.0° | medium |
+| DFM-05 紧固件可达性 | `dfms_FastenerAccess`（头部 2 mm + 插入 2 mm） | 工具包络 Φ10×40 | low |
+| DFM-06 紧固件间隙 | `dfms_FastenerClearance`（端部 1 mm / 通孔 0.1 mm） | 轴向/径向各 0.5 mm | medium |
+| DFM-07 啮合长度 | `dfms_FastenerEngagement`（L/D ≥ 1.5） | 钢 1.0 / 软材料 1.5 | medium |
+
 ### 3. 回归结论
 
 - 新旧双路径在 13 个 mock 模型上判定零差异（severity / measured / threshold / unit / part / face 全字段）；
@@ -143,7 +167,9 @@
 | ~~W2 机加其余 9 项~~ | ✅ 已完成（2026-10-30）：`nearest()`、9 项迁移、9 份证据、零差异对账 | — |
 | ~~W3 注塑 11 项~~ | ✅ 已完成（2026-10-31）：`table()`/`if()`/可选 measured、11 项迁移、11 份证据、零差异对账 | — |
 | ~~W4 钣金 8 项~~ | ✅ 已完成（2026-10-31）：8 项迁移、8 份证据、零差异对账 | — |
-| W5 装配 7 项 | 布尔/几何谓词；对照 `dfa\checker\assemblies` 与 `dfms_Fastener*`；顺带补黑盒试验件 | W4 |
+| ~~W5 装配 7 项~~ | ✅ 已完成（2026-10-31）：7 项迁移、7 份证据、零差异对账 | — |
+| **验收补强** | 参数化试验件批量跑 Check-Mate，补全各域黑盒样本与一致率报告；38 项差异清单交工艺确认 | 甲方现场 |
+| PERF 线 | Simcenter 3D / FloEFD 电热与接触工况复刻（另线，见 CLAUDE.md 五·2） | 独立启动 |
 | W5 装配 7 项 | 布尔/几何谓词；对照 `dfa\checker\assemblies` 与 `dfms_Fastener*` | W4 |
 
 ## 六、复现命令
@@ -152,9 +178,10 @@
 # 单测
 python -m unittest discover -s tests
 
-# 双跑对账（13 个 mock 模型 + 钣金夹具，零差异；已迁移的 31 项全量）
+# 双跑对账（13 个 mock 模型 + 钣金夹具，零差异；38 项全量）
+ALL_DFM=$(python -c "print(','.join(f'DFM-{i:02d}' for i in range(1,39)))")
 python tools/checkmate/reconcile_verdicts.py --model mockdata/models --model tests/fixtures/bent_sheet.model.json \
-    --no-expression-for DFM-08,DFM-09,DFM-10,DFM-11,DFM-12,DFM-13,DFM-14,DFM-15,DFM-16,DFM-17,DFM-18,DFM-19,DFM-20,DFM-21,DFM-22,DFM-23,DFM-24,DFM-25,DFM-26,DFM-27,DFM-28,DFM-29,DFM-30,DFM-31,DFM-32,DFM-33,DFM-34,DFM-35,DFM-36,DFM-37,DFM-38
+    --no-expression-for "$ALL_DFM"
 
 # Check-Mate 冒烟（fail / pass 两例）
 python tools/checkmate/run_checkmate.py smoke --checker dfms_DeepHoles

@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "name": "dfm_default",
-  "version": "0.8",
-  "updated_at": "2026-10-30T14:36:44+08:00",
+  "version": "0.9",
+  "updated_at": "2026-10-30T14:41:32+08:00",
   "rules": [
     {
       "rule_id": "R-DFM-01",
@@ -17,11 +17,24 @@
         "min_overlap_extent_mm": 0.05,
         "confidence_crude": 0.5
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P1",
       "notes": "两两实体求交，体积>0；需区分硬干涉/临界间隙/碎面虚假干涉",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.volume_mm3 > params.interference_volume_mm3 + 1e-9",
+            "measured": "meas.volume_mm3",
+            "threshold": "params.interference_volume_mm3",
+            "note": "实体重叠体积超过阈值"
+          }
+        ]
+      },
+      "unit": "mm^3",
+      "rounding": 6,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_ComponentInterference.html（存在干涉即失败，无体积阈值）；证据 docs/checkmate_evidence\\DFM-01.md"
     },
     {
       "rule_id": "R-DFM-02",
@@ -33,11 +46,31 @@
         "min_clearance_mm": 0.3,
         "confidence_crude": 0.55
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目评测边界，见 docs/DEMO_SCENE.md（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "零件间最小距离 < 阈值（默认 0.2~0.5mm，可配）",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.precise == 1 and meas.gap_mm <= params.min_clearance_mm + 1e-9",
+            "measured": "meas.gap_mm",
+            "threshold": "params.min_clearance_mm",
+            "note": "精确测距最小间隙不足"
+          },
+          {
+            "when": "meas.precise == 0 and meas.gap_mm <= params.min_clearance_mm + 1e-9",
+            "severity": "P3",
+            "measured": "meas.gap_mm",
+            "threshold": "params.min_clearance_mm",
+            "note": "包围盒粗筛间隙不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 6,
+      "reference": "Check-Mate 无直接对应（DFA/装配间隙分析 mqc_check_assembly_clearance_analysis.dfa 可作参考）；公式为项目基线；证据 docs/checkmate_evidence\\DFM-02.md"
     },
     {
       "rule_id": "R-DFM-03",
@@ -52,11 +85,24 @@
         "candidate_search_radius_mm": 2.0,
         "candidate_angle_deg": 10.0
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "跨零件孔轴线同轴度偏差 ≤ 允许值，且公称直径匹配",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.offset_mm > params.axis_offset_tolerance_mm + 1e-9 or meas.diameter_delta_mm > params.diameter_tolerance_mm + 1e-9 or meas.angle_deg > params.axis_angle_tolerance_deg + 1e-9",
+            "measured": "meas.offset_mm",
+            "threshold": "params.axis_offset_tolerance_mm",
+            "note": "轴线偏差/直径差/夹角任一超差"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 6,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_HoleAlignment.html（search_dist 1 mm、max_distance 0 mm、max_angle 0°）；证据 docs/checkmate_evidence\\DFM-03.md"
     },
     {
       "rule_id": "R-DFM-04",
@@ -70,11 +116,24 @@
         "candidate_search_radius_mm": 3.0,
         "candidate_angle_deg": 10.0
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "槽中线与孔轴线偏差 ≤ 允许值",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.offset_mm > params.center_offset_tolerance_mm + 1e-9 or meas.angle_deg > params.axis_angle_tolerance_deg + 1e-9",
+            "measured": "meas.offset_mm",
+            "threshold": "params.center_offset_tolerance_mm",
+            "note": "孔/槽中心偏差或夹角超差"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 6,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotToHoleAlignment.html（ang_max 0.1°、dist_max 0.01 mm）；证据 docs/checkmate_evidence\\DFM-04.md"
     },
     {
       "rule_id": "R-DFM-05",
@@ -86,11 +145,36 @@
         "tool_envelope_diameter_mm": 10.0,
         "tool_envelope_height_mm": 40.0
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P1",
       "notes": "沿螺栓轴线扫掠工具包络，不得与周边件碰撞",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.accessible_flag == 1",
+            "measured": "if(meas.diameter_present == 1, meas.diameter_mm, if(meas.height_present == 1, meas.height_mm, 0))",
+            "threshold": "if(meas.diameter_present == 1, params.tool_envelope_diameter_mm, if(meas.height_present == 1, params.tool_envelope_height_mm, params.tool_envelope_diameter_mm))",
+            "note": "上游标注不可达"
+          },
+          {
+            "when": "meas.diameter_present == 1 and meas.diameter_mm < params.tool_envelope_diameter_mm - 1e-9",
+            "measured": "if(meas.diameter_present == 1, meas.diameter_mm, if(meas.height_present == 1, meas.height_mm, 0))",
+            "threshold": "if(meas.diameter_present == 1, params.tool_envelope_diameter_mm, if(meas.height_present == 1, params.tool_envelope_height_mm, params.tool_envelope_diameter_mm))",
+            "note": "可用工具直径不足"
+          },
+          {
+            "when": "meas.height_present == 1 and meas.height_mm < params.tool_envelope_height_mm - 1e-9",
+            "measured": "if(meas.diameter_present == 1, meas.diameter_mm, if(meas.height_present == 1, meas.height_mm, 0))",
+            "threshold": "if(meas.diameter_present == 1, params.tool_envelope_diameter_mm, if(meas.height_present == 1, params.tool_envelope_height_mm, params.tool_envelope_diameter_mm))",
+            "note": "可用工具高度不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerAccess.html（min_head_clearance 2 mm、min_insertion_clearance 2 mm）；证据 docs/checkmate_evidence\\DFM-05.md"
     },
     {
       "rule_id": "R-DFM-06",
@@ -102,11 +186,30 @@
         "axial_clearance_mm": 0.5,
         "radial_clearance_mm": 0.5
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "螺栓头/垫圈与周边件的轴向、径向间隙 ≥ 阈值",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.direction == 1 and meas.clearance_mm < params.radial_clearance_mm - 1e-9",
+            "measured": "meas.clearance_mm",
+            "threshold": "params.radial_clearance_mm",
+            "note": "径向间隙不足"
+          },
+          {
+            "when": "meas.direction == 2 and meas.clearance_mm < params.axial_clearance_mm - 1e-9",
+            "measured": "meas.clearance_mm",
+            "threshold": "params.axial_clearance_mm",
+            "note": "轴向间隙不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerClearance.html（min_tip_clearance 1 mm、min_through_hole_clearance 0.1 mm）；证据 docs/checkmate_evidence\\DFM-06.md"
     },
     {
       "rule_id": "R-DFM-07",
@@ -118,11 +221,24 @@
         "engagement_ratio_steel": 1.0,
         "engagement_ratio_plastic": 1.5
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目任务定义默认值，见 docs/TEAM_TASKS.md（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "螺纹旋合长度/公称直径 ≥ 1.0（钢）~1.5（铝/塑料）",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.engagement_ratio < if(meas.is_soft == 1, params.engagement_ratio_plastic, params.engagement_ratio_steel) - 1e-9",
+            "measured": "meas.engagement_ratio",
+            "threshold": "if(meas.is_soft == 1, params.engagement_ratio_plastic, params.engagement_ratio_steel)",
+            "note": "啮合长度比 L/D 不足"
+          }
+        ]
+      },
+      "unit": "ratio",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerEngagement.html（min_eng_len_diam_ratio 默认 1.5）；证据 docs/checkmate_evidence\\DFM-07.md"
     },
     {
       "rule_id": "R-DFM-08",

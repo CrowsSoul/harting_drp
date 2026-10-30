@@ -7,6 +7,7 @@ from itertools import combinations
 
 from ...checkers.base import CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ...geom import bbox_gap
 from ._assembly_base import AssemblyChecker
 from ._assembly_common import EPS, candidate_face_pairs, nearest_face_pair
@@ -19,6 +20,12 @@ class MinClearanceChecker(AssemblyChecker):
     default_params = {"min_clearance_mm": 0.3, "confidence_crude": 0.55}
 
     def check(self, ctx: CheckContext) -> list[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    def _candidates(self, ctx: CheckContext) -> list[tuple]:
+        """几何层：包围盒预筛 + 候选面对（新旧路径共用）。"""
         threshold = float(ctx.param("min_clearance_mm", 0.3))
         candidates: list[tuple] = []
         for a, b in combinations([p for p in ctx.parts() if p.bbox is not None], 2):
@@ -31,7 +38,10 @@ class MinClearanceChecker(AssemblyChecker):
                 face_pairs = [fallback] if fallback is not None else []
             if face_pairs:
                 candidates.append((a, b, coarse_gap, face_pairs))
+        return candidates
 
+    def _measure(self, ctx: CheckContext, candidates):
+        """有 NX 代理时批量精确测距；返回 (a, b, gap, fa, fb, precise, face_pairs)。"""
         tag_pairs = [
             (fa.tag, fb.tag)
             for _, _, _, face_pairs in candidates
@@ -41,8 +51,6 @@ class MinClearanceChecker(AssemblyChecker):
         if ctx.nx is not None and tag_pairs:
             # 整个 checker 只启动一次 NX；随后 distance() 只查代理缓存。
             ctx.nx.prefetch(tag_pairs)
-
-        findings: list[Finding] = []
         for a, b, coarse_gap, face_pairs in candidates:
             exact_rows = []
             if ctx.nx is not None:
@@ -52,7 +60,6 @@ class MinClearanceChecker(AssemblyChecker):
                     distance = ctx.nx.distance(fa.tag, fb.tag)
                     if distance is not None:
                         exact_rows.append((float(distance), fa, fb))
-
             if exact_rows:
                 gap, fa, fb = min(exact_rows, key=lambda row: row[0])
                 precise = True
@@ -60,9 +67,63 @@ class MinClearanceChecker(AssemblyChecker):
                 gap = coarse_gap
                 fa, fb = face_pairs[0]
                 precise = False
+            yield a, b, gap, fa, fb, precise, face_pairs
+
+    # ---------------- 规则模型 v2：最小间隙判定在 R-DFM-02 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        threshold = float(ctx.param("min_clearance_mm", 0.3))
+        findings: list[Finding] = []
+        for a, b, gap, fa, fb, precise, face_pairs in self._measure(ctx, self._candidates(ctx)):
+            try:
+                verdicts = ctx.evaluate({"gap_mm": gap, "precise": 1 if precise else 0})
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(ctx.finding(
+                    severity=verdict.severity,
+                    message=(
+                        ("" if precise else "【包围盒粗筛】")
+                        + f"零件 {a.part_id} 与 {b.part_id} 的最小间隙 {gap:.3f} mm "
+                        f"≤ 阈值 {threshold:.3f} mm。"
+                    ),
+                    part_refs=[a.part_id, b.part_id],
+                    # 这是两面之间的关系；用 bbox + face_ids 定位，不伪造单点坐标。
+                    bbox=fa.bbox,
+                    measured_value=verdict.measured,
+                    threshold_value=verdict.threshold,
+                    unit=verdict.unit or "mm",
+                    confidence=(
+                        0.98
+                        if precise
+                        else min(0.6, float(ctx.param("confidence_crude", 0.55)))
+                    ),
+                    face_ids=[fa.face_id, fb.face_id],
+                    suggestion_text=(
+                        f"调整 {a.part_id} 或 {b.part_id} 的结构/定位，"
+                        f"使精确最小间隙大于 {threshold:.3f} mm。"
+                    ),
+                    suggestion_delta={"target_min_clearance_mm": threshold},
+                    note=(
+                        "NX 面-面最小距离"
+                        if precise
+                        else "包围盒距离下界，需用 NX 精确测距复核"
+                    ),
+                    extra={
+                        "method": "nx_minimum_distance" if precise else "bbox_gap",
+                        "coarse": not precise,
+                        "needs_nx_confirmation": not precise,
+                        "candidate_face_pair_count": len(face_pairs),
+                    },
+                ))
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> list[Finding]:
+        threshold = float(ctx.param("min_clearance_mm", 0.3))
+        findings: list[Finding] = []
+        for a, b, gap, fa, fb, precise, face_pairs in self._measure(ctx, self._candidates(ctx)):
             if gap > threshold + EPS:
                 continue
-
             findings.append(ctx.finding(
                 severity=(ctx.rule.severity if precise else "P3"),
                 message=(
@@ -71,7 +132,6 @@ class MinClearanceChecker(AssemblyChecker):
                     f"≤ 阈值 {threshold:.3f} mm。"
                 ),
                 part_refs=[a.part_id, b.part_id],
-                # 这是两面之间的关系；用 bbox + face_ids 定位，不伪造单点坐标。
                 bbox=fa.bbox,
                 measured_value=round(gap, 6),
                 threshold_value=threshold,

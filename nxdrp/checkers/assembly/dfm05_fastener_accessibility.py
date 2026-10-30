@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from ...checkers.base import CheckContext
 from ...contracts import Finding, ModelBundle
+from ...expr import ExprMissingSymbol
 from ._assembly_base import AssemblyChecker
 from ._assembly_common import EPS, extract_fasteners, trace_location
 
@@ -33,6 +34,68 @@ class FastenerAccessibilityChecker(AssemblyChecker):
         )
 
     def check(self, ctx: CheckContext) -> list[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：可达性/包络判定在 R-DFM-05 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        req_d = float(ctx.param("tool_envelope_diameter_mm", 10.0))
+        req_h = float(ctx.param("tool_envelope_height_mm", 40.0))
+        findings: list[Finding] = []
+        for fastener in extract_fasteners(ctx.model):
+            diameter = fastener.available_tool_diameter_mm
+            height = fastener.available_tool_height_mm
+            measurements = {
+                "accessible_flag": 1 if fastener.accessible is False else 0,
+                "diameter_present": 1 if diameter is not None else 0,
+                "height_present": 1 if height is not None else 0,
+            }
+            if diameter is not None:
+                measurements["diameter_mm"] = diameter
+            if height is not None:
+                measurements["height_mm"] = height
+            try:
+                verdicts = ctx.evaluate(measurements)
+            except ExprMissingSymbol:
+                continue
+            location, bbox = trace_location(
+                ctx.model, fastener.face_ids, fastener.head_center
+            )
+            for verdict in verdicts:
+                findings.append(ctx.finding(
+                    severity=verdict.severity,
+                    message=(
+                        f"紧固件 {fastener.feature_id} 的工具包络不可达："
+                        f"可用直径={diameter} mm，可用高度={height} mm，"
+                        f"要求至少 Φ{req_d:.2f}×{req_h:.2f} mm。"
+                    ),
+                    part_refs=[fastener.part_id] + fastener.blocking_part_ids,
+                    location=location,
+                    bbox=bbox,
+                    measured_value=verdict.measured,
+                    threshold_value=verdict.threshold,
+                    unit=verdict.unit or "mm",
+                    confidence=0.98,
+                    face_ids=fastener.face_ids,
+                    suggestion_text=(
+                        "移除/避让遮挡件或扩大操作空间，使工具包络达到"
+                        f"Φ{req_d:.2f}×{req_h:.2f} mm。"
+                    ),
+                    suggestion_delta={
+                        "target_tool_diameter_mm": req_d,
+                        "target_tool_height_mm": req_h,
+                    },
+                    extra={
+                        "available_tool_diameter_mm": diameter,
+                        "available_tool_height_mm": height,
+                        "blocking_part_ids": fastener.blocking_part_ids,
+                    },
+                ))
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> list[Finding]:
         req_d = float(ctx.param("tool_envelope_diameter_mm", 10.0))
         req_h = float(ctx.param("tool_envelope_height_mm", 40.0))
         findings: list[Finding] = []

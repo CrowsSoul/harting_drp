@@ -44,6 +44,7 @@ python tools/checkmate/run_checkmate.py smoke --checker dfms_DeepHoles --param l
 | 文件 | 内容 |
 |---|---|
 | `smoke.md` | 许可与环境冒烟结论（W1） |
+| `DFM-01.md` ~ `DFM-07.md` | 装配 7 条迁移规则的取证记录（含紧固件系列对照） |
 | `DFM-08.md` ~ `DFM-18.md` | 注塑 11 条迁移规则的取证记录（多数在 Check-Mate 中无对应项，已如实标注） |
 | `DFM-19.md` ~ `DFM-26.md` | 钣金 8 条迁移规则的取证记录（Check-Mate 覆盖最全的一域） |
 | `DFM-27.md` ~ `DFM-38.md` | 机加工 12 条迁移规则的取证记录与差异清单（每条一份） |

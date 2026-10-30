@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from ...checkers.base import CheckContext
 from ...contracts import Finding, ModelBundle
+from ...expr import ExprMissingSymbol
 from ._assembly_base import AssemblyChecker
 from ._assembly_common import EPS, extract_fasteners, trace_location
 
@@ -31,6 +32,60 @@ class FastenerClearanceChecker(AssemblyChecker):
         )
 
     def check(self, ctx: CheckContext) -> list[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：径向/轴向两个 case，判定在 R-DFM-06 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        limits = (
+            ("radial", 1, "径向", float(ctx.param("radial_clearance_mm", 0.5))),
+            ("axial", 2, "轴向", float(ctx.param("axial_clearance_mm", 0.5))),
+        )
+        findings: list[Finding] = []
+        for fastener in extract_fasteners(ctx.model):
+            for key, direction, label, limit in limits:
+                measured = getattr(fastener, f"{key}_clearance_mm")
+                if measured is None:
+                    continue
+                try:
+                    # 每次只给一个方向的测量量：另一方向的 case 因缺数据自动跳过
+                    verdicts = ctx.evaluate(
+                        {"clearance_mm": measured, "direction": direction}
+                    )
+                except ExprMissingSymbol:
+                    continue
+                if not verdicts:
+                    continue
+                location, bbox = trace_location(
+                    ctx.model, fastener.face_ids, fastener.head_center
+                )
+                for verdict in verdicts:
+                    findings.append(ctx.finding(
+                        severity=verdict.severity,
+                        message=(
+                            f"紧固件 {fastener.feature_id} 的{label}间隙 "
+                            f"{measured:.3f} mm < 阈值 {limit:.3f} mm。"
+                        ),
+                        part_refs=[fastener.part_id] + fastener.blocking_part_ids,
+                        location=location,
+                        bbox=bbox,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        confidence=0.98,
+                        face_ids=fastener.face_ids,
+                        suggestion_text=(
+                            f"调整孔位、紧固件头部或周边结构，使{label}间隙"
+                            f"达到 {limit:.3f} mm 以上。"
+                        ),
+                        suggestion_delta={f"target_{key}_clearance_mm": limit},
+                        extra={"clearance_direction": key, "fastener_id": fastener.feature_id},
+                    ))
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> list[Finding]:
         limits = (
             ("radial", "径向", float(ctx.param("radial_clearance_mm", 0.5))),
             ("axial", "轴向", float(ctx.param("axial_clearance_mm", 0.5))),

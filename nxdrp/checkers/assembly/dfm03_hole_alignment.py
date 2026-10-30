@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from ...checkers.base import CheckContext
 from ...contracts import Finding, ModelBundle
+from ...expr import ExprMissingSymbol
 from ._assembly_base import AssemblyChecker
 from ._assembly_common import (
     EPS,
@@ -43,6 +44,67 @@ class HoleAlignmentChecker(AssemblyChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> list[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：三项容差判定在 R-DFM-03 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        offset_limit = float(ctx.param("axis_offset_tolerance_mm", 0.1))
+        diameter_limit = float(ctx.param("diameter_tolerance_mm", 0.1))
+        angle_limit = float(ctx.param("axis_angle_tolerance_deg", 1.0))
+        findings: list[Finding] = []
+        for a, b in self._pairs(ctx.model, ctx.params):
+            offset = line_distance(a.center, a.axis, b.center, b.axis)
+            if offset is None:
+                continue
+            diameter_delta = abs(a.diameter - b.diameter)
+            angle = unsigned_axis_angle_deg(a.axis, b.axis)
+            try:
+                verdicts = ctx.evaluate({
+                    "offset_mm": offset,
+                    "diameter_delta_mm": diameter_delta,
+                    "angle_deg": angle,
+                })
+            except ExprMissingSymbol:
+                continue
+            coarse = a.source != "metadata" or b.source != "metadata"
+            for verdict in verdicts:
+                findings.append(ctx.finding(
+                    severity=verdict.severity,
+                    message=(
+                        ("【几何粗筛】" if coarse else "")
+                        + f"零件 {a.part_id}/{b.part_id} 的配对孔未对齐：轴线偏差 {offset:.3f} mm，"
+                        f"直径差 {diameter_delta:.3f} mm，轴线夹角 {angle:.3f}°。"
+                    ),
+                    part_refs=[a.part_id, b.part_id],
+                    location=a.center,
+                    measured_value=verdict.measured,
+                    threshold_value=verdict.threshold,
+                    unit=verdict.unit or "mm",
+                    confidence=min(a.confidence, b.confidence),
+                    face_ids=a.face_ids + b.face_ids,
+                    suggestion_text=(
+                        f"调整孔中心/装配定位，使轴线偏差≤{offset_limit:.3f} mm、"
+                        f"直径差≤{diameter_limit:.3f} mm、夹角≤{angle_limit:.3f}°。"
+                    ),
+                    suggestion_delta={
+                        "axis_offset_tolerance_mm": offset_limit,
+                        "diameter_tolerance_mm": diameter_limit,
+                        "axis_angle_tolerance_deg": angle_limit,
+                    },
+                    note="metadata 标注为高置信度；纯圆柱面推断为几何粗筛",
+                    extra={
+                        "axis_offset_mm": offset,
+                        "diameter_delta_mm": diameter_delta,
+                        "axis_angle_deg": angle,
+                        "coarse": coarse,
+                    },
+                ))
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> list[Finding]:
         offset_limit = float(ctx.param("axis_offset_tolerance_mm", 0.1))
         diameter_limit = float(ctx.param("diameter_tolerance_mm", 0.1))
         angle_limit = float(ctx.param("axis_angle_tolerance_deg", 1.0))

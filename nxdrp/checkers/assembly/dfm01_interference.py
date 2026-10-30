@@ -7,6 +7,7 @@ from itertools import combinations
 
 from ...checkers.base import CheckContext
 from ...contracts import BBox, Finding
+from ...expr import ExprMissingSymbol
 from ._assembly_base import AssemblyChecker
 from ._assembly_common import (
     EPS,
@@ -34,7 +35,12 @@ class InterferenceChecker(AssemblyChecker):
     }
 
     def check(self, ctx: CheckContext) -> list[Finding]:
-        volume_limit = float(ctx.param("interference_volume_mm3", 0.01))
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    def _rows(self, ctx: CheckContext) -> list[dict]:
+        """几何层：上游干涉记录优先，否则包围盒重叠预筛（新旧路径共用）。"""
         min_extent = float(ctx.param("min_overlap_extent_mm", 0.05))
         min_area = float(ctx.param("ignore_face_area_below_mm2", 0.1))
         crude_confidence = min(0.6, float(ctx.param("confidence_crude", 0.5)))
@@ -85,9 +91,62 @@ class InterferenceChecker(AssemblyChecker):
                     "exact": False,
                     "overlap_extents_mm": extents,
                 })
+        return rows
 
+    # ---------------- 规则模型 v2：重叠体积判定在 R-DFM-01 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        volume_limit = float(ctx.param("interference_volume_mm3", 0.01))
         findings: list[Finding] = []
-        for row in rows:
+        for row in self._rows(ctx):
+            volume = float(row["volume"])
+            if len(row["face_ids"]) < 2:
+                continue
+            try:
+                verdicts = ctx.evaluate({"volume_mm3": volume})
+            except ExprMissingSymbol:
+                continue
+            a, b = row["parts"]
+            exact = bool(row["exact"])
+            prefix = "" if exact else "【包围盒粗筛】"
+            for verdict in verdicts:
+                findings.append(ctx.finding(
+                    severity=verdict.severity,
+                    message=(
+                        f"{prefix}零件 {a} 与 {b} 的重叠体积 {float(verdict.measured):.4f} mm³ "
+                        f"> 阈值 {volume_limit:.4f} mm³。"
+                    ),
+                    part_refs=[a, b],
+                    location=row["box"].center if row["box"] else None,
+                    bbox=row["box"],
+                    measured_value=verdict.measured,
+                    threshold_value=verdict.threshold,
+                    unit=verdict.unit or "mm^3",
+                    confidence=row["confidence"],
+                    face_ids=row["face_ids"],
+                    suggestion_text=(
+                        f"调整 {a} 或 {b} 的装配定位/结构，消除实体重叠；"
+                        f"精确求交体积应不大于 {volume_limit:.4f} mm³。"
+                    ),
+                    suggestion_delta={"target_interference_volume_mm3": volume_limit},
+                    note=(
+                        "NX 精确实体求交结果"
+                        if exact
+                        else "包围盒只用于候选预筛，必须在 NX 中执行实体求交复核"
+                    ),
+                    extra={
+                        "method": row["method"],
+                        "coarse": not exact,
+                        "needs_nx_confirmation": not exact,
+                        "overlap_extents_mm": row.get("overlap_extents_mm"),
+                    },
+                ))
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> list[Finding]:
+        volume_limit = float(ctx.param("interference_volume_mm3", 0.01))
+        findings: list[Finding] = []
+        for row in self._rows(ctx):
             volume = float(row["volume"])
             if volume <= volume_limit + EPS or len(row["face_ids"]) < 2:
                 continue

@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "library_id": "PERF-MATERIALS-2606-v1",
+  "status": "provisional",
+  "note": "Engineering defaults for workflow setup. Supplier TDS and temper-specific data are required before CAE certification.",
+  "reference_temperature_c": 20.0,
+  "materials": {
+    "Cu": {
+      "density_kg_m3": 8960.0,
+      "thermal_conductivity_w_mk": 401.0,
+      "specific_heat_j_kgk": 385.0,
+      "electrical_resistivity_ohm_m": 1.724e-8,
+      "temperature_coefficient_1_k": 0.00393,
+      "elastic_modulus_gpa": 110.0,
+      "poisson_ratio": 0.34,
+      "yield_strength_mpa": 70.0,
+      "emissivity": 0.25,
+      "friction_coefficient": 0.2,
+      "provenance": "common engineering reference; supplier confirmation required"
+    },
+    "CuSn6": {
+      "density_kg_m3": 8800.0,
+      "thermal_conductivity_w_mk": 120.0,
+      "specific_heat_j_kgk": 380.0,
+      "electrical_resistivity_ohm_m": 1.3e-7,
+      "temperature_coefficient_1_k": 0.0006,
+      "elastic_modulus_gpa": 110.0,
+      "poisson_ratio": 0.34,
+      "yield_strength_mpa": 450.0,
+      "emissivity": 0.2,
+      "friction_coefficient": 0.2,
+      "provenance": "common engineering reference; temper and supplier TDS required"
+    },
+    "CuZn37": {
+      "density_kg_m3": 8440.0,
+      "thermal_conductivity_w_mk": 120.0,
+      "specific_heat_j_kgk": 377.0,
+      "electrical_resistivity_ohm_m": 6.2e-8,
+      "temperature_coefficient_1_k": 0.0015,
+      "elastic_modulus_gpa": 100.0,
+      "poisson_ratio": 0.34,
+      "yield_strength_mpa": 300.0,
+      "emissivity": 0.2,
+      "friction_coefficient": 0.2,
+      "provenance": "common engineering reference; temper and supplier TDS required"
+    },
+    "CuBe2": {
+      "density_kg_m3": 8250.0,
+      "thermal_conductivity_w_mk": 105.0,
+      "specific_heat_j_kgk": 420.0,
+      "electrical_resistivity_ohm_m": 7.8e-8,
+      "temperature_coefficient_1_k": 0.001,
+      "elastic_modulus_gpa": 131.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 1000.0,
+      "emissivity": 0.2,
+      "friction_coefficient": 0.2,
+      "provenance": "common engineering reference; temper and supplier TDS required"
+    }
+  }
+}

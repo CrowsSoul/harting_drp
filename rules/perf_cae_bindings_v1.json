@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "items": {
+    "PERF-01": {
+      "required_face_roles": [
+        "electrical_inlet",
+        "electrical_outlet",
+        "convection",
+        "radiation"
+      ],
+      "required_result_queries": [
+        "maximum_temperature_c",
+        "delta_t_c",
+        "total_resistance_ohm",
+        "joule_power_w",
+        "convergence_status",
+        "residual"
+      ],
+      "required_material_fields": [
+        "density_kg_m3",
+        "thermal_conductivity_w_mk",
+        "specific_heat_j_kgk",
+        "electrical_resistivity_ohm_m",
+        "temperature_coefficient_1_k",
+        "emissivity"
+      ],
+      "required_loads": [
+        "current_a",
+        "ambient_temperature_c",
+        "convection_h_w_m2k",
+        "radiation_emissivity"
+      ]
+    },
+    "PERF-02": {
+      "required_face_roles": [
+        "fixed_root",
+        "driven_face"
+      ],
+      "required_result_queries": [
+        "insertion_force_n",
+        "withdrawal_force_n",
+        "maximum_normal_contact_force_n",
+        "maximum_penetration_mm",
+        "maximum_equivalent_stress_mpa",
+        "convergence_status",
+        "residual"
+      ],
+      "required_material_fields": [
+        "density_kg_m3",
+        "elastic_modulus_gpa",
+        "poisson_ratio",
+        "yield_strength_mpa"
+      ],
+      "required_loads": [
+        "insertion_displacement_mm"
+      ],
+      "required_contact_parameters": [
+        "source_face_ids",
+        "target_face_ids",
+        "method",
+        "friction_coefficient",
+        "penalty_stiffness",
+        "search_distance_mm"
+      ]
+    }
+  }
+}

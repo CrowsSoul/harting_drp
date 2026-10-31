@@ -29,6 +29,20 @@ def _spring(length_mm: float, width_mm: float, thickness_mm: float, material: st
             )
         ],
         faces=[],
+        meta={
+            "performance": {
+                "PERF-02": {
+                    "contact_springs": [
+                        {
+                            "part_id": "P01",
+                            "length_mm": length_mm,
+                            "width_mm": width_mm,
+                            "thickness_mm": thickness_mm,
+                        }
+                    ]
+                }
+            }
+        },
     )
 
 

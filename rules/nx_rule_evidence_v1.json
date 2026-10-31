@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0.0",
+  "product": "Siemens Designcenter NX 2606.3002",
+  "inspected_at": "2026-10-30",
+  "purpose": "Record NX rule semantics and engineering mappings used by PERF. This is evidence metadata, not a copy of Siemens implementation code or licensed rule files.",
+  "sources": [
+    {
+      "asset": "Check-Mate / mqc_evaluate_comparison_expression.dfa",
+      "observed": {
+        "operators": [">", "<", ">=", "<=", "==", "!=", "!", "&&", "||"],
+        "equality_tolerance_default": 1e-7,
+        "pass_semantics": "conditional expression evaluates non-zero",
+        "fail_semantics": "conditional expression evaluates zero"
+      },
+      "used_by": ["PERF-01", "PERF-02"],
+      "confidence": "observed_in_installed_rule_template"
+    },
+    {
+      "asset": "Check-Mate / measure_minimum_dist.dfa and measure_angle_between_2lines.dfa",
+      "observed": {
+        "range_keywords": ["LT", "LE", "GT", "GE"],
+        "range_classes": ["pass", "warning/marginal", "fail"],
+        "boundary_semantics": "explicit inclusive/exclusive operators"
+      },
+      "used_by": ["PERF-02"],
+      "confidence": "observed_in_installed_rule_template"
+    },
+    {
+      "asset": "Check-Mate / mqc_dfm_hole_to_trim.dfa",
+      "observed": {
+        "physical_inputs": ["sheet_metal_thickness", "material_yield_strength", "panel", "sampling_rate"],
+        "fail_semantics": "measured distance below the configured criteria limit"
+      },
+      "mapping": "A design rule must keep physical inputs and solver settings instead of only a final threshold.",
+      "used_by": ["PERF-01", "PERF-02"],
+      "confidence": "observed_in_installed_rule_template"
+    },
+    {
+      "asset": "NX Thermal Flow / advprm_thermal.xml",
+      "observed": {
+        "relevant_capabilities": [
+          "temperature-dependent conductance",
+          "radiation temperature limit",
+          "iteration and convergence controls",
+          "thermal coupling"
+        ]
+      },
+      "mapping": "PERF-01 keeps temperature-dependent resistivity, radiation, heat balance and convergence residuals.",
+      "used_by": ["PERF-01"],
+      "confidence": "observed_solver_parameter_catalog"
+    },
+    {
+      "asset": "Simulation templates / FemThermalFlowMetric.fem and SimThermalFlowMetric.sim",
+      "observed": {
+        "solver": "NX THERMAL / FLOW",
+        "analysis_types": [
+          "Thermal",
+          "Flow",
+          "Coupled Thermal-Flow"
+        ]
+      },
+      "used_by": ["PERF-01"],
+      "confidence": "observed_installed_template_metadata"
+    },
+    {
+      "asset": "NX Nastran / contact.ddl and NQA-1 T043 contact verification",
+      "observed": {
+        "contact_cards": ["BCONP", "BCTSET", "BCTPARA", "BFRIC", "BSURFS"],
+        "solution": "SOL 401 Multi-Step Nonlinear",
+        "method": "surface contact with penalty and Coulomb friction capabilities"
+      },
+      "used_by": ["PERF-02"],
+      "confidence": "observed_installed_schema_and_verification_data"
+    }
+  ],
+  "rule_mapping": {
+    "PERF-01": {
+      "formula_library": "rules/perf_formula_v2.json#PERF-01",
+      "nx_role": "thermal network and conditional-result semantics",
+      "local_components": ["contact resistance correlation", "lumped conductor geometry"],
+      "not_replicated": ["proprietary TMG matrix solver", "view-factor implementation", "vendor contact correlations"]
+    },
+    "PERF-02": {
+      "formula_library": "rules/perf_formula_v2.json#PERF-02",
+      "nx_role": "nonlinear surface contact solver and friction/penalty definitions",
+      "local_components": ["Euler-Bernoulli reduced-order spring", "constant Coulomb friction"],
+      "not_replicated": ["NX nonlinear contact iteration", "contact search algorithm", "plasticity and wear models"]
+    }
+  },
+  "certification_policy": {
+    "formula_is_not_solver_output": true,
+    "cae_solver_requires_authorized_license": true,
+    "minimum_cases_per_item": 20,
+    "required_checks": [
+      "convergence",
+      "mesh sensitivity",
+      "model identity match",
+      "unit match",
+      "decision agreement",
+      "error distribution"
+    ]
+  }
+}

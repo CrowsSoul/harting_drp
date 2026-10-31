@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harting.local/nxdrp/perf_solver_result.schema.json",
+  "title": "PERF CAE Solver Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "case_id",
+    "check_item_id",
+    "solver",
+    "convergence_status",
+    "outputs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "check_item_id": {
+      "enum": ["PERF-01", "PERF-02"]
+    },
+    "solver": {
+      "type": "object",
+      "required": ["product", "version", "license_mode"],
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license_mode": {
+          "type": "string",
+          "enum": [
+            "authorized",
+            "commercial",
+            "floating",
+            "node_locked",
+            "evaluation",
+            "unverified"
+          ]
+        }
+      }
+    },
+    "model_identity": {
+      "type": "object",
+      "properties": {
+        "model_id": {"type": "string"},
+        "content_digest": {"type": "string"},
+        "input_digest": {"type": "string"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "started_at": {"type": "string"},
+        "finished_at": {"type": "string"},
+        "case_file": {"type": "string"},
+        "result_file": {"type": "string"},
+        "mesh_study": {"type": "string"}
+      }
+    },
+    "convergence_status": {
+      "enum": ["converged", "not_converged", "failed", "unknown"]
+    },
+    "residual": {
+      "type": ["number", "null"]
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "unit"],
+        "properties": {
+          "value": {"type": "number"},
+          "unit": {"type": "string"},
+          "location": {
+            "type": "array",
+            "items": {"type": "number"}
+          },
+          "face_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "mesh_sensitivity_relative_change_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "energy_balance_relative_error": {
+          "type": "number",
+          "minimum": 0
+        },
+        "penetration_max_mm": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": false
+}

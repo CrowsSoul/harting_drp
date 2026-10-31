@@ -9,6 +9,7 @@ __pycache__/
 .cache/
 
 # 运行产物
+runtime/
 findings.json
 findings_*.json
 eval*.json

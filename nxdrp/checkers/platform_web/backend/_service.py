@@ -108,10 +108,23 @@ class Store:
         return [json.loads(r[0]) for r in rows]
 
     def update(self, kind: str, key: str, **changes):
-        with self.lock:
-            value = self.get(kind, key)
+        # Keep read-modify-write in one SQLite transaction. Opening a second
+        # connection while several workers update task progress can exhaust the
+        # busy timeout on Windows even though the records are independent.
+        with self.lock, self.connect() as db:
+            row = db.execute(
+                "SELECT payload FROM records WHERE kind=? AND id=?",
+                (kind, key),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"找不到 {kind}: {key}")
+            value = json.loads(row[0])
             value.update(changes)
-            self.put(kind, key, value)
+            db.execute(
+                "INSERT INTO records VALUES (?,?,?) "
+                "ON CONFLICT(kind,id) DO UPDATE SET payload=excluded.payload",
+                (kind, key, encode(value)),
+            )
 
 
 def validate_rulebook(payload: dict) -> RuleBook:
@@ -335,8 +348,12 @@ class Platform:
 
             def progress(index, total, checker):
                 if checker.check_item_id in planned:
-                    update(current_item=checker.check_item_id, completed_items=len(completed))
                     completed.append(checker.check_item_id)
+                    # Task state changes are visible without writing 44 separate
+                    # SQLite transactions per run. At ten concurrent jobs that
+                    # progress traffic is the dominant cost on Windows.
+                    if len(completed) == 1 or len(completed) % 5 == 0:
+                        update(current_item=checker.check_item_id, completed_items=len(completed))
 
             result = run(model, RuleBook.load(str(self.artifact(key, "rules.json"))), reg, only=task["only"], nx=proxy, progress=progress)
             payload = result.to_dict()

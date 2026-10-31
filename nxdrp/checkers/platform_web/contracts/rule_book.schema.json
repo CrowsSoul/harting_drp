@@ -43,17 +43,6 @@
           "params": {
             "type": "object"
           },
-          "source_standard": {
-            "type": "string"
-          },
-          "severity": {
-            "enum": [
-              "P0",
-              "P1",
-              "P2",
-              "P3"
-            ]
-          },
           "expression": {
             "type": "object"
           },
@@ -74,6 +63,23 @@
           },
           "reference": {
             "type": "string"
+          },
+          "formula_ref": {
+            "type": "string"
+          },
+          "formula": {
+            "type": "object"
+          },
+          "source_standard": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ]
           }
         }
       }

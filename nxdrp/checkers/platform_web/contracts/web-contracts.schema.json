@@ -565,6 +565,13 @@
         },
         "reference": {
           "type": "string"
+        },
+        "formula_ref": {
+          "type": "string"
+        },
+        "formula": {
+          "type": "object",
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -583,7 +590,9 @@
         "unit",
         "rounding",
         "exceptions",
-        "reference"
+        "reference",
+        "formula_ref",
+        "formula"
       ]
     },
     "RuleBook": {

@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0.0",
+  "name": "perf_solver_cases",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "case_id": "PERF-01-ET-STEADY-001",
+      "check_item_id": "PERF-01",
+      "analysis_type": "steady_electrothermal",
+      "solver_targets": [
+        "Siemens Simcenter 3D Thermal Flow / NX Thermal",
+        "Siemens FloEFD"
+      ],
+      "purpose": "取得导体最高绝对温度、温升、电阻焦耳热和收敛证据，用于回填 PERF-01 规则认证样本。",
+      "geometry": {
+        "source": "NX part / assembly",
+        "conductor_selector": "selected conductor body and cylindrical bottleneck face",
+        "required_evidence": ["body_id", "face_id", "section_area_mm2", "current_path_length_mm"]
+      },
+      "material": {
+        "required": ["electrical_resistivity_ohm_m", "temperature_coefficient_1_k", "thermal_conductivity_w_mk"],
+        "temperature_dependency": true
+      },
+      "boundary_conditions": {
+        "current_a": 16.0,
+        "ambient_temperature_c": 25.0,
+        "convection_h_w_m2k": 15.0,
+        "radiation_emissivity": 0.25,
+        "contact_resistance_ohm": "from measured joint or explicit not-modeled flag"
+      },
+      "solver_outputs": {
+        "required": [
+          "maximum_temperature_c",
+          "delta_t_c",
+          "total_resistance_ohm",
+          "joule_power_w",
+          "voltage_drop_v",
+          "convergence_status",
+          "residual"
+        ],
+        "probe_locations": ["minimum cross-section", "contact interfaces", "hottest node"]
+      },
+      "acceptance": {
+        "convergence": "converged",
+        "mesh_study": "maximum temperature change <= 2% between medium and fine mesh",
+        "energy_balance_relative_error": "<= 0.02",
+        "result_manifest_schema": "perf_solver_result.schema.json"
+      }
+    },
+    {
+      "case_id": "PERF-02-CONTACT-STATIC-001",
+      "check_item_id": "PERF-02",
+      "analysis_type": "structural_contact_static_nonlinear",
+      "solver_targets": [
+        "Siemens Simcenter 3D Structures / NX Nastran SOL 401",
+        "Siemens Simcenter 3D Structures / NX Nastran SOL 402"
+      ],
+      "purpose": "取得接触法向力、切向力、插拔方向反力、接触穿透和收敛证据，校准 PERF-02 降阶公式。",
+      "geometry": {
+        "source": "NX assembly with mated terminal and spring contact",
+        "contact_definition": "surface-to-surface",
+        "required_evidence": ["source_face_ids", "target_face_ids", "spring_length_mm", "width_mm", "thickness_mm", "interference_mm"]
+      },
+      "contact": {
+        "method": "penalty",
+        "friction_model": "coulomb",
+        "friction_coefficient": 0.2,
+        "penalty_stiffness": "mesh-convergence calibrated",
+        "search_distance": ">= expected penetration and below adjacent-feature scale",
+        "large_displacement": true,
+        "parameter_cards_to_review": ["BCONP", "BCTSET", "BFRIC", "BCTPARA"]
+      },
+      "load_steps": [
+        {
+          "step": 1,
+          "action": "establish_contact",
+          "control": "displacement until nominal interference is reached"
+        },
+        {
+          "step": 2,
+          "action": "insert",
+          "output": "insertion_force_n"
+        },
+        {
+          "step": 3,
+          "action": "withdraw",
+          "output": "withdrawal_force_n"
+        }
+      ],
+      "solver_outputs": {
+        "required": [
+          "insertion_force_n",
+          "withdrawal_force_n",
+          "maximum_normal_contact_force_n",
+          "maximum_equivalent_stress_mpa",
+          "maximum_penetration_mm",
+          "convergence_status",
+          "residual"
+        ]
+      },
+      "acceptance": {
+        "convergence": "converged",
+        "mesh_study": "force change <= 3% between medium and fine contact mesh",
+        "penetration_limit_mm": 0.01,
+        "result_manifest_schema": "perf_solver_result.schema.json"
+      }
+    }
+  ]
+}

@@ -40,6 +40,8 @@ RULE_PARAMS = {
     "interval_confidence": 0.8,
     "insertion_force_max_n": 20.0,
     "withdrawal_force_min_n": 1.0,
+    "geometry_source": "contact_metadata",
+    "solver_result_path": "",
     "materials": {
         "CuSn6": {"e_gpa": 110.0},
         "CuBe2": {"e_gpa": 131.0},

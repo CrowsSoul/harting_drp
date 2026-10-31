@@ -98,6 +98,8 @@ export interface Rule {
   rounding: number | null
   exceptions: (Record<string, unknown>)[]
   reference: string
+  formula_ref: string
+  formula: Record<string, unknown>
 }
 
 export interface RuleBook {

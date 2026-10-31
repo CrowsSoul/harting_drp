@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0.0",
+  "source": "NX 2606 installed command catalog and Thermal Flow/Nastran templates",
+  "items": {
+    "PERF-01": {
+      "solver": "NX THERMAL / FLOW",
+      "analysis_type": "Coupled Thermal-Flow",
+      "selection_requirements": [
+        "electrical inlet faces",
+        "electrical outlet faces",
+        "all exposed convection faces",
+        "radiation faces"
+      ],
+      "operations": [
+        "assign temperature-dependent electrical resistivity",
+        "assign thermal conductivity, density and specific heat",
+        "apply current or voltage boundary",
+        "enable Joule Heating",
+        "apply convection coefficient and ambient temperature",
+        "apply emissivity and radiation enclosure",
+        "request maximum temperature and Joule power"
+      ],
+      "solver_controls": {
+        "maximum_radiative_temperature_c": 6000.0,
+        "required_outputs": [
+          "maximum_temperature_c",
+          "delta_t_c",
+          "total_resistance_ohm",
+          "joule_power_w",
+          "convergence_status",
+          "residual"
+        ]
+      }
+    },
+    "PERF-02": {
+      "solver": "NX NASTRAN",
+      "analysis_type": "Structural",
+      "solution_type": "Nonlinear Statics",
+      "selection_requirements": [
+        "spring fixed-root faces",
+        "spring insertion/withdrawal driven faces",
+        "contact source faces",
+        "contact target faces"
+      ],
+      "operations": [
+        "assign linear-elastic material",
+        "create tetrahedral or hexahedral structural mesh",
+        "define source/target surface contact",
+        "set Coulomb friction coefficient",
+        "configure penalty contact and search distance",
+        "fix root degrees of freedom",
+        "apply insertion displacement or force step",
+        "request contact force, reaction force, displacement and stress"
+      ],
+      "solver_controls": {
+        "solution_card": "SOL 401",
+        "large_displacement": true,
+        "required_outputs": [
+          "insertion_force_n",
+          "withdrawal_force_n",
+          "maximum_normal_contact_force_n",
+          "maximum_penetration_mm",
+          "maximum_equivalent_stress_mpa",
+          "convergence_status",
+          "residual"
+        ]
+      }
+    }
+  }
+}

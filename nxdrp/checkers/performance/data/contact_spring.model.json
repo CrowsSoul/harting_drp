@@ -87,5 +87,24 @@
   "occurrences": [],
   "adjacency": [],
   "diagnostics": {},
-  "meta": {"note": "手写样例，6×4×0.6 mm，CuSn6"}
+  "meta": {
+    "note": "6×4×0.6 mm CuSn6 等效悬臂簧片；几何来自显式接触元数据",
+    "performance": {
+      "PERF-02": {
+        "contact_springs": [
+          {
+            "part_id": "P01",
+            "face_ids": ["F1", "F2"],
+            "length_mm": 6.0,
+            "width_mm": 4.0,
+            "thickness_mm": 0.6,
+            "overlap_mm": 0.2,
+            "contacts": 4.0,
+            "lead_angle_deg": 30.0,
+            "friction_coeff": 0.2
+          }
+        ]
+      }
+    }
+  }
 }

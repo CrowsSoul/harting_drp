@@ -361,7 +361,13 @@ class ModelBundle:
 # --------------------------------------------------------------------------
 @dataclass
 class Rule:
-    """一条检查规则。阈值全部是数据，不写在代码里（合同第 7 条要求）。"""
+    """一条检查规则。
+
+    ``params`` 保留给 V1 阈值插件兼容；V2 插件可把计算模型放在
+    ``formula_ref``/``formula``，把判定式、单位、舍入例外和出处放在
+    ``expression``、``unit``、``rounding``、``exceptions``、``reference``。
+    未使用的新字段不会改变旧规则的行为。
+    """
 
     rule_id: str
     check_item_id: str
@@ -385,16 +391,28 @@ class Rule:
     exceptions: list[dict] = field(default_factory=list)
     #: 判定口径出处（Check-Mate 规则路径/标准条款），复刻与审计用
     reference: str = ""
+    #: PERF 等扩展规则使用的独立公式库引用；空 = 不使用公式库
+    formula_ref: str = ""
+    #: 规则的完整内联公式；为空时由 formula_ref 指向外部公式库
+    formula: dict = field(default_factory=dict)
 
     @property
     def has_expression(self) -> bool:
         """是否带表达式判定。迁移期 checker 用它做新旧双路径开关。"""
-        return bool(self.expression and self.expression.get("cases"))
+        return isinstance(self.expression, dict) and bool(self.expression.get("cases"))
 
     def to_dict(self) -> dict:
         data = asdict(self)
         # v2 字段为空时不写进 JSON：老规则的文件形态保持不变，diff 只显示真正用到的规则
-        for key in ("expression", "unit", "rounding", "exceptions", "reference"):
+        for key in (
+            "expression",
+            "unit",
+            "rounding",
+            "exceptions",
+            "reference",
+            "formula_ref",
+            "formula",
+        ):
             if data.get(key) in ({}, "", None, []):
                 data.pop(key, None)
         return data
@@ -682,6 +700,13 @@ def schema_documents() -> dict[str, dict]:
                             "process_type": {"type": "string"},
                             "enabled": {"type": "boolean"},
                             "params": {"type": "object"},
+                            "expression": {"type": "string"},
+                            "unit": {"type": "string"},
+                            "rounding": {"type": "object"},
+                            "exceptions": {"type": "array", "items": {"type": "object"}},
+                            "reference": {"type": "object"},
+                            "formula_ref": {"type": "string"},
+                            "formula": {"type": "object"},
                             "source_standard": {"type": "string"},
                             "severity": {"enum": list(SEVERITIES)},
                             "expression": {"type": "object"},

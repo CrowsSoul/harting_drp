@@ -33,7 +33,7 @@ def plugin_registry() -> Registry:
 
 
 REGISTRY = plugin_registry()
-RULEBOOK = RuleBook.load(str(PLUGIN_ROOT / "rules_m6b.json"))
+RULEBOOK = RuleBook.load(str(PLUGIN_ROOT / "rules.json"))
 
 
 def run_m6b(model: ModelBundle, only=None, rulebook=None):

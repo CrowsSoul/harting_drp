@@ -22,6 +22,12 @@ import math
 RULE_PARAMS = {
     "current_a": 16.0,
     "ambient_temp_c": 25.0,
+    "emissivity": 0.25,
+    "contact_resistance_ohm_mm2": 1.5e-4,
+    "reference_temp_c": 20.0,
+    "max_solver_rise_c": 4000.0,
+    "max_temperature_c": 2000.0,
+    "solver_result_path": "",
     "interval_confidence": 0.8,
     "max_rise_c": 45.0,
     "convection_h_w_m2k": 15.0,
@@ -36,10 +42,10 @@ RULE_PARAMS = {
     "h_w_m2k_min": 8.0,
     "h_w_m2k_max": 25.0,
     "materials": {
-        "Cu": {"rho_ohm_m": 1.724e-8},
-        "CuSn6": {"rho_ohm_m": 1.3e-7},
-        "CuZn37": {"rho_ohm_m": 6.2e-8},
-        "CuBe2": {"rho_ohm_m": 7.8e-8},
+        "Cu": {"rho_ohm_m": 1.724e-8, "temp_coeff_per_c": 0.00393},
+        "CuSn6": {"rho_ohm_m": 1.3e-7, "temp_coeff_per_c": 0.0006},
+        "CuZn37": {"rho_ohm_m": 6.2e-8, "temp_coeff_per_c": 0.0015},
+        "CuBe2": {"rho_ohm_m": 7.8e-8, "temp_coeff_per_c": 0.001},
     },
 }
 

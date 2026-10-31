@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harting.local/nxdrp/perf_cae_binding.schema.json",
+  "title": "PERF CAE Binding",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "case_id",
+    "check_item_id",
+    "material",
+    "source_geometry",
+    "face_roles",
+    "load_values",
+    "contact_pairs",
+    "result_queries",
+    "solver",
+    "binding_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "check_item_id": {
+      "enum": ["PERF-01", "PERF-02"]
+    },
+    "material": {
+      "type": "object",
+      "required": ["material"],
+      "properties": {
+        "material": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "source_geometry": {
+      "type": "object",
+      "required": ["source_part", "model_digest", "body_tags"],
+      "properties": {
+        "source_part": {"type": "string"},
+        "model_digest": {"type": "string"},
+        "body_tags": {
+          "type": "array",
+          "items": {"type": "integer"}
+        },
+        "status": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "face_roles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["face_ids", "body_ids", "status"],
+        "properties": {
+          "face_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "body_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "status": {
+            "enum": ["pending", "confirmed"]
+          }
+        }
+      }
+    },
+    "load_values": {
+      "type": "object"
+    },
+    "contact_pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source_face_ids",
+          "target_face_ids",
+          "method",
+          "friction_coefficient",
+          "penalty_stiffness",
+          "search_distance_mm",
+          "status"
+        ],
+        "properties": {
+          "source_face_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "target_face_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "method": {
+            "enum": ["penalty", "lagrange", "augmented_lagrange"]
+          },
+          "friction_coefficient": {
+            "type": ["number", "null"]
+          },
+          "penalty_stiffness": {
+            "type": ["number", "string", "null"]
+          },
+          "search_distance_mm": {
+            "type": ["number", "null"]
+          },
+          "status": {
+            "enum": ["pending", "confirmed"]
+          }
+        }
+      }
+    },
+    "result_queries": {
+      "type": "object"
+    },
+    "solver": {
+      "type": "object",
+      "required": ["product", "analysis_type", "solution_type"]
+    },
+    "binding_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

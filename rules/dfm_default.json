@@ -1379,6 +1379,12 @@
       "params": {
         "current_a": 16.0,
         "ambient_temp_c": 25.0,
+        "emissivity": 0.25,
+        "contact_resistance_ohm_mm2": 0.00015,
+        "reference_temp_c": 20.0,
+        "max_solver_rise_c": 4000.0,
+        "max_temperature_c": 2000.0,
+        "solver_result_path": "",
         "interval_confidence": 0.8,
         "max_rise_c": 45.0,
         "convection_h_w_m2k": 15.0,
@@ -1394,23 +1400,37 @@
         "h_w_m2k_max": 25.0,
         "materials": {
           "Cu": {
-            "rho_ohm_m": 1.724e-08
+            "rho_ohm_m": 1.724e-08,
+            "temp_coeff_per_c": 0.00393
           },
           "CuSn6": {
-            "rho_ohm_m": 1.3e-07
+            "rho_ohm_m": 1.3e-07,
+            "temp_coeff_per_c": 0.0006
           },
           "CuZn37": {
-            "rho_ohm_m": 6.2e-08
+            "rho_ohm_m": 6.2e-08,
+            "temp_coeff_per_c": 0.0015
           },
           "CuBe2": {
-            "rho_ohm_m": 7.8e-08
+            "rho_ohm_m": 7.8e-08,
+            "temp_coeff_per_c": 0.001
           }
         }
       },
-      "version": "0.1",
-      "source_standard": "集总对流模型初值；电阻率与允许温升可在本条 params 中改",
+      "version": "2.0",
+      "unit": "degC",
+      "rounding": 2,
+      "exceptions": [
+        {
+          "when": "missing material, conductor face or solver inputs",
+          "action": "skip"
+        }
+      ],
+      "reference": "rules/perf_formula_v2.json#PERF-01；docs/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json",
+      "formula_ref": "PERF-01",
+      "source_standard": "NX Check-Mate 条件比较 + NX Thermal Flow/TMG 稳态热网络；接触电阻为本地标定项",
       "severity": "P2",
-      "notes": "由几何/材料/工况特征预测稳态温升与允许载流，输出区间。允许温升见 max_rise_c",
+      "notes": "公式直接计算稳态温度；NX 条件式负责温升和绝对温度判定。标定区间只表达不确定性，不决定 PASS/FAIL",
       "owner": "性能预测"
     },
     {
@@ -1437,6 +1457,8 @@
         "interval_confidence": 0.8,
         "insertion_force_max_n": 20.0,
         "withdrawal_force_min_n": 1.0,
+        "geometry_source": "contact_metadata",
+        "solver_result_path": "",
         "materials": {
           "CuSn6": {
             "e_gpa": 110.0
@@ -1449,10 +1471,24 @@
           }
         }
       },
-      "version": "0.1",
-      "source_standard": "悬臂梁 + 摩擦模型初值；弹性模量、过盈量、摩擦系数可在本条 params 中改",
+      "version": "2.0",
+      "unit": "N",
+      "rounding": 2,
+      "exceptions": [
+        {
+          "when": "contact spring metadata is missing or invalid",
+          "action": "skip"
+        },
+        {
+          "when": "1 - friction_coeff * tan(lead_angle) <= 0",
+          "action": "skip"
+        }
+      ],
+      "reference": "rules/perf_formula_v2.json#PERF-02；docs/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json；rules/perf_cae_cases.json#PERF-02",
+      "formula_ref": "PERF-02",
+      "source_standard": "NX Nastran 摩擦/罚函数接触工况 + 欧拉-伯努利悬臂梁与库仑摩擦降阶公式",
       "severity": "P2",
-      "notes": "由接触簧片几何/材料/过盈量预测插入力、拔出力。标签为悬臂梁摩擦公式。",
+      "notes": "由明确接触特征元数据计算插入力和拔出力；达到边界值即判失败，不使用包围盒猜测几何",
       "owner": "性能预测"
     }
   ]

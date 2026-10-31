@@ -69,6 +69,28 @@ if not defined PYEXE (
 
 if not defined PYEXE goto :no_python
 
+rem ---------- frontend static bundle ----------
+set "FRONTEND_DIR=%ROOT%nxdrp\checkers\platform_web\frontend"
+if not exist "%FRONTEND_DIR%\dist\index.html" (
+  echo   Frontend bundle is missing; building it now...
+  where npm >nul 2>nul
+  if errorlevel 1 goto :frontend_tools_missing
+  pushd "%FRONTEND_DIR%"
+  if not exist "node_modules" (
+    call npm ci --no-audit --no-fund
+    if errorlevel 1 (
+      popd
+      goto :frontend_build_failed
+    )
+  )
+  call npm run build
+  if errorlevel 1 (
+    popd
+    goto :frontend_build_failed
+  )
+  popd
+)
+
 echo   Python: %PYEXE%
 echo.
 "%PYEXE%" "%ROOT%tools\launch_platform.py" %*
@@ -109,6 +131,24 @@ echo     %VENV_PY%
 echo     %BASE_PY%
 echo   Neither works, so the folder is incomplete. Re-extract the whole
 echo   package to a normal folder and double-click this file again.
+echo.
+pause
+exit /b 1
+
+:frontend_tools_missing
+echo   [ERROR] Frontend is not built and Node.js/npm was not found.
+echo   Install Node.js, or use a complete release package that includes:
+echo     %FRONTEND_DIR%\dist\index.html
+echo.
+pause
+exit /b 1
+
+:frontend_build_failed
+echo   [ERROR] Frontend dependency installation or build failed.
+echo   Open this folder and run the commands manually:
+echo     %FRONTEND_DIR%
+echo     npm ci
+echo     npm run build
 echo.
 pause
 exit /b 1

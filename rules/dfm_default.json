@@ -733,13 +733,16 @@
         "rated_voltage_v": 400,
         "pollution_degree": 2,
         "material_group": "II",
-        "overvoltage_category": "III"
+        "overvoltage_category": "III",
+        "field_condition": "case_a",
+        "altitude_m": 2000,
+        "iec_profile_path": "rules/iec_60664_1_profiles.json"
       },
-      "version": "0.1",
-      "source_standard": "",
+      "version": "2.0",
+      "source_standard": "IEC 60664-1:2020, 5.3.3, Tables F.1/F.2 and A.2",
       "severity": "P0",
       "notes": "导体两两配对求最短空间直线距离，与 IEC 60664-1 限值比对；AutoCrear 结果作对照",
-      "owner": "电气安规"
+      "owner": "电气安规 宋馨雨、汪琪竣"
     },
     {
       "rule_id": "R-SAF-02",
@@ -751,13 +754,16 @@
         "rated_voltage_v": 400,
         "pollution_degree": 2,
         "material_group": "II",
-        "cti": 600
+        "working_voltage_source": "network_difference",
+        "insulation_environment": "inner",
+        "interpolate_creepage": true,
+        "iec_profile_path": "rules/iec_60664_1_profiles.json"
       },
-      "version": "0.1",
-      "source_standard": "",
+      "version": "2.0",
+      "source_standard": "IEC 60664-1:2020, 5.3.2 and Table F.5",
       "severity": "P0",
       "notes": "沿绝缘表面求最短泄漏路径，处理沟槽/筋/倒角规则；AutoCrear 结果作对照",
-      "owner": "电气安规"
+      "owner": "电气安规 宋馨雨、汪琪竣"
     },
     {
       "rule_id": "R-SAF-03",
@@ -766,13 +772,14 @@
       "name": "安规不合规归集",
       "enabled": true,
       "params": {
-        "combine": "worst"
+        "combine": "worst",
+        "working_voltage_source": "network_difference"
       },
-      "version": "0.1",
-      "source_standard": "",
+      "version": "2.0",
+      "source_standard": "Derived from SAF-01/SAF-02; worst-case aggregation",
       "severity": "P1",
       "notes": "综合间隙与爬电结果，任一项低于限值即判不合规并分级",
-      "owner": "电气安规"
+      "owner": "电气安规 宋馨雨、汪琪竣"
     },
     {
       "rule_id": "R-SAF-04",
@@ -783,11 +790,11 @@
       "params": {
         "target_margin_mm": 0.5
       },
-      "version": "0.1",
-      "source_standard": "",
+      "version": "2.0",
+      "source_standard": "Derived from SAF-01/SAF-02 thresholds plus explicit engineering margin",
       "severity": "P2",
       "notes": "输出目标尺寸：增大间隙到 X mm / 增加绝缘筋使爬电达到 Y mm",
-      "owner": "电气安规"
+      "owner": "电气安规 宋馨雨、汪琪竣"
     },
     {
       "rule_id": "R-PERF-01",

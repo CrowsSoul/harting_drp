@@ -19,6 +19,14 @@
       "type": "string",
       "minLength": 1
     },
+    "batch_id": {"type": "string"},
+    "setup_digest": {"type": "string", "minLength": 64, "maxLength": 64},
+    "binding_digest": {"type": "string", "minLength": 64, "maxLength": 64},
+    "capability_id": {"type": "string"},
+    "evidence_source": {
+      "enum": ["cae_solver", "cae_smoke", "smoke_fixture"],
+      "default": "cae_solver"
+    },
     "check_item_id": {
       "enum": ["PERF-01", "PERF-02"]
     },
@@ -62,6 +70,8 @@
         "finished_at": {"type": "string"},
         "case_file": {"type": "string"},
         "result_file": {"type": "string"},
+        "native_result_path": {"type": "string"},
+        "native_result_digest": {"type": "string", "minLength": 64, "maxLength": 64},
         "mesh_study": {"type": "string"}
       }
     },

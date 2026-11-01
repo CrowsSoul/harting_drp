@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from typing import Any, Iterable
 
@@ -655,8 +656,8 @@ def _face_schema() -> dict:
 
 
 def schema_documents() -> dict[str, dict]:
-    """返回三份契约的 JSON Schema 文档。"""
-    return {
+    """返回核心契约及静态 PERF CAE 契约的 JSON Schema 文档。"""
+    documents = {
         "model_bundle.schema.json": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "$id": "https://harting.local/nxdrp/model_bundle.schema.json",
@@ -745,3 +746,13 @@ def schema_documents() -> dict[str, dict]:
             },
         },
     }
+    schema_dir = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", "..", "contracts", "schema",
+    ))
+    if os.path.isdir(schema_dir):
+        for filename in sorted(os.listdir(schema_dir)):
+            if not filename.startswith("perf_") or not filename.endswith(".schema.json"):
+                continue
+            with open(os.path.join(schema_dir, filename), "r", encoding="utf-8") as fh:
+                documents[filename] = json.load(fh)
+    return documents

@@ -67,7 +67,7 @@
             "items": {"type": "string"}
           },
           "status": {
-            "enum": ["pending", "confirmed"]
+            "enum": ["pending", "proposed", "confirmed"]
           }
         }
       }
@@ -110,7 +110,7 @@
             "type": ["number", "null"]
           },
           "status": {
-            "enum": ["pending", "confirmed"]
+            "enum": ["pending", "proposed", "confirmed"]
           }
         }
       }
@@ -125,6 +125,16 @@
     "binding_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "confirmation": {
+      "type": "object",
+      "required": ["reviewer", "confirmed_at", "geometry_digest"],
+      "properties": {
+        "reviewer": {"type": "string", "minLength": 1},
+        "confirmed_at": {"type": "string", "minLength": 1},
+        "geometry_digest": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
     },
     "status": {
       "type": "string"

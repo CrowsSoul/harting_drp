@@ -167,3 +167,7 @@ NX/Simcenter/FloEFD 环境完成：
 3. 用求解结果标定 `R_contact`、摩擦、罚刚度和降阶公式误差；
 4. 将公式误差报告写入规则版本；
 5. 只有完成上述步骤后，才能把当前公式的适用范围从“筛查”升级为“认证预测”。
+
+当前新增的 Simcenter setup/solve/export journal 和版本能力映射属于离线联调实现，
+尚未经过目标 NX 版本的实际 API 验证。FloEFD 仅提供工程交接和统一结果回填。
+evaluation、unverified、cae_smoke 与测试夹具都不能作为生产认证证据。

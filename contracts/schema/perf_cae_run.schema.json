@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harting.local/nxdrp/perf_cae_run.schema.json",
+  "title": "PERF CAE resumable stage state",
+  "type": "object",
+  "required": ["schema_version", "case_id", "setup_digest", "offline", "status", "stages", "solver_run_performed"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "batch_id": {"type": "string"},
+    "case_id": {"type": "string", "minLength": 1},
+    "setup_digest": {"type": "string", "minLength": 64, "maxLength": 64},
+    "offline": {"type": "boolean"},
+    "status": {"enum": ["pending", "ready", "running", "succeeded", "blocked", "not_done", "failed"]},
+    "solver_run_performed": {"type": "boolean"},
+    "created_at": {"type": "string"},
+    "updated_at": {"type": "string"},
+    "stages": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "attempt", "input_digest", "artifacts", "not_done"],
+        "properties": {
+          "status": {"enum": ["pending", "ready", "running", "succeeded", "blocked", "not_done", "failed"]},
+          "attempt": {"type": "integer", "minimum": 0},
+          "input_digest": {"type": "string"},
+          "artifacts": {"type": "object"},
+          "response_path": {"type": "string"},
+          "started_at": {"type": "string"},
+          "finished_at": {"type": "string"},
+          "elapsed_s": {"type": "number", "minimum": 0},
+          "diagnostics": {"type": "object"},
+          "error": {"type": "string"},
+          "not_done": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

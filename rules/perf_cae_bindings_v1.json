@@ -13,9 +13,17 @@
         "delta_t_c",
         "total_resistance_ohm",
         "joule_power_w",
+        "voltage_drop_v",
         "convergence_status",
         "residual"
       ],
+      "required_result_units": {
+        "maximum_temperature_c": "degC",
+        "delta_t_c": "degC",
+        "total_resistance_ohm": "ohm",
+        "joule_power_w": "W",
+        "voltage_drop_v": "V"
+      },
       "required_material_fields": [
         "density_kg_m3",
         "thermal_conductivity_w_mk",
@@ -26,6 +34,7 @@
       ],
       "required_loads": [
         "current_a",
+        "outlet_voltage_v",
         "ambient_temperature_c",
         "convection_h_w_m2k",
         "radiation_emissivity"
@@ -34,7 +43,9 @@
     "PERF-02": {
       "required_face_roles": [
         "fixed_root",
-        "driven_face"
+        "driven_face",
+        "contact_source",
+        "contact_target"
       ],
       "required_result_queries": [
         "insertion_force_n",
@@ -45,6 +56,13 @@
         "convergence_status",
         "residual"
       ],
+      "required_result_units": {
+        "insertion_force_n": "N",
+        "withdrawal_force_n": "N",
+        "maximum_normal_contact_force_n": "N",
+        "maximum_penetration_mm": "mm",
+        "maximum_equivalent_stress_mpa": "MPa"
+      },
       "required_material_fields": [
         "density_kg_m3",
         "elastic_modulus_gpa",
@@ -52,7 +70,8 @@
         "yield_strength_mpa"
       ],
       "required_loads": [
-        "insertion_displacement_mm"
+        "normal_overlap_mm",
+        "insertion_stroke_mm"
       ],
       "required_contact_parameters": [
         "source_face_ids",
@@ -60,7 +79,10 @@
         "method",
         "friction_coefficient",
         "penalty_stiffness",
-        "search_distance_mm"
+        "search_distance_mm",
+        "normal_overlap_mm",
+        "insertion_stroke_mm",
+        "large_displacement"
       ]
     }
   }

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harting.local/nxdrp/perf_cae_setup.schema.json",
+  "title": "PERF CAE validated setup manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "setup_id",
+    "case_id",
+    "check_item_id",
+    "status",
+    "solver_run_performed",
+    "model_identity",
+    "binding",
+    "capability",
+    "solution",
+    "material",
+    "mesh",
+    "required_output_units",
+    "artifacts",
+    "setup_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "setup_id": {"type": "string", "minLength": 8},
+    "batch_id": {"type": "string"},
+    "case_id": {"type": "string", "minLength": 1},
+    "check_item_id": {"enum": ["PERF-01", "PERF-02"]},
+    "status": {"enum": ["draft", "ready", "solver_ready", "not_done"]},
+    "solver_run_performed": {"const": false},
+    "model_identity": {
+      "type": "object",
+      "required": ["model_id", "content_digest"],
+      "properties": {
+        "model_id": {"type": "string"},
+        "content_digest": {"type": "string"},
+        "input_digest": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "case": {"type": "object"},
+    "binding": {
+      "type": "object",
+      "required": ["path", "digest", "payload"],
+      "properties": {
+        "path": {"type": "string"},
+        "digest": {"type": "string", "minLength": 64, "maxLength": 64},
+        "payload": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "capability": {"type": "object"},
+    "solution": {
+      "type": "object",
+      "required": ["mode", "nx_release"],
+      "properties": {
+        "mode": {"enum": ["thermal_with_joule", "nonlinear_contact"]},
+        "nx_release": {"type": "string"},
+        "solver": {"type": "string"},
+        "analysis": {"type": "string"},
+        "solution_type": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "material": {"type": "object"},
+    "mesh": {"type": "object"},
+    "boundary_conditions": {"type": "object"},
+    "contact_pairs": {"type": "array"},
+    "load_steps": {"type": "array"},
+    "required_output_units": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "result_mapping": {"type": "object"},
+    "artifacts": {"type": "object", "additionalProperties": {"type": "string"}},
+    "setup_digest": {"type": "string", "minLength": 64, "maxLength": 64}
+  },
+  "additionalProperties": false
+}

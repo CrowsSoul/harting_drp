@@ -67,50 +67,28 @@ python -m nxdrp.checkers.performance.cae_batch status `
 材料工程默认值位于 `rules/perf_material_library_v1.json`，当前状态为
 `provisional`。正式认证前必须替换为供应商 TDS 中的牌号、状态和温度相关曲线。
 
-生成 NX Simcenter FEM/SIM 容器请求：
+几何响应返回的 body/face tags 先由 `apply_geometry_response()` 填为 `proposed`，
+工程师确认后才可生成统一 setup manifest：
 
 ```powershell
-python -m nxdrp.checkers.performance.solver_case `
-  --case PERF-02-CONTACT-STATIC-001 `
-  --out runtime/perf02_case.json `
-  --source-part mockdata/parts/plate_holes.prt `
-  --out-dir runtime/perf02_simcenter `
-  --create-solution `
-  --solution-type "Nonlinear Statics" `
-  --mesh `
-  --element-size 0.25 `
-  --nx-request-out runtime/perf02_nx_request.json
+python -m nxdrp.checkers.performance.cae_orchestrator prepare `
+  --case-dir runtime/perf_cae_workspace/PERF02-CONTACT-0001 `
+  --nx-release "NX 2606.3002"
 ```
 
-也可以先生成参数化试验件：
+编排分为 `prepare -> setup -> solve -> export`。默认离线执行只记录阻断，不启动 NX；
+后续授权环境必须将精确版本能力标为 `verified` 并显式增加 `--online`。PERF-01 使用
+`thermal_with_joule`，PERF-02 使用 SOL 401 的建立接触、插入、拔出三载荷步。
+版本相关 API 未验证时返回 `not_done`，不会用相近求解类型或公式值代替。
+
+FloEFD 当前只生成 PERF-01 工程交接单并复用统一结果回填，不自动创建项目或求解：
 
 ```powershell
-python -m nxdrp.checkers.performance.cae_batch geometry-request `
-  --batch runtime/perf_cae_batch.json `
-  --case-id PERF02-CONTACT-0001 `
-  --prt runtime/perf02_0001.prt `
-  --out runtime/perf02_0001_geometry.json
-
-python -m nxdrp.checkers.performance.nx_geometry_runner `
-  --request runtime/perf02_0001_geometry.json `
-  --response runtime/perf02_0001_geometry_response.json
+python -m nxdrp.checkers.performance.floefd_handoff `
+  --case runtime/perf_cae_workspace/PERF01-ET-0001/case.json `
+  --binding runtime/perf_cae_workspace/PERF01-ET-0001/bindings.json `
+  --out runtime/perf_cae_workspace/PERF01-ET-0001/floefd_handoff.json
 ```
-
-在 NX 内执行（也可由下面的 Python 包装器调用）：
-
-```text
-D:\Siemens\Designcenter2606\NXBIN\run_journal.exe nxdrp\journals\create_simcenter_case.py
-```
-
-```powershell
-python -m nxdrp.checkers.performance.nx_cae_runner `
-  --request runtime/perf02_nx_request.json `
-  --response runtime/perf02_nx_response.json
-```
-
-该 journal 创建并关联 FEM/SIM、设置求解环境；指定 `--mesh` 时使用自动尺寸或
-指定四面体尺寸生成体积网格。它不会把尚未设置材料、载荷和边界条件的容器冒充
-成可求解 CAE 工况。
 
 求解后把符合结果契约的 JSON 放入结果目录：
 
@@ -131,9 +109,9 @@ python -m nxdrp.checkers.performance.cae_batch certify `
   --out runtime/perf_certification.md
 ```
 
-`ingest` 默认真实认证门禁：结果必须已收敛并声明 `authorized`、`commercial`、
-`floating`、`node_locked` 或 `evaluation` 授权模式。只有接口联调时才能显式增加
-`--allow-unverified-for-smoke`，该批次不得用于认证结论。
+`ingest` 默认真实认证门禁：结果必须已收敛、身份完整并声明生产授权模式。
+`evaluation`、`unverified` 和 smoke 数据不具备生产认证资格；只有接口联调时才能显式增加
+`--allow-unverified-for-smoke`，含 smoke 的 records 文件不得用于认证结论。
 
 `certify` 默认要求每项至少 20 条正式授权样本、中位相对误差不超过 5%、
 判定一致率不低于 95%，并要求每条结果带网格敏感性证据。

@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
 """NX / Simcenter / FloEFD 求解结果的可审计读取器。
 
-PERF 公式可以独立做快速筛查，但只有经过这里校验的求解结果才允许标记为
-``cae_solver``。缺少结果、未收敛、模型摘要不一致或来源伪造时，调用方必须
-退回公式筛査或跳过，不能把本地公式冒充成 CAE 结果。
+本地公式只用于筛查。只有通过身份、单位、收敛和授权校验的真实求解结果，
+才能作为 ``cae_solver`` 证据；smoke 数据永远不能进入生产认证。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any
+
+
+PRODUCTION_LICENSE_MODES = frozenset({
+    "authorized", "commercial", "floating", "node_locked",
+})
+EVIDENCE_SOURCES = frozenset({"cae_solver", "cae_smoke", "smoke_fixture"})
 
 
 class SolverEvidenceError(ValueError):
@@ -34,10 +39,25 @@ class SolverEvidence:
     content_digest: str = ""
     input_digest: str = ""
     residual: float | None = None
+    batch_id: str = ""
+    setup_digest: str = ""
+    binding_digest: str = ""
+    capability_id: str = ""
+    native_result_path: str = ""
+    native_result_digest: str = ""
+    evidence_source: str = "cae_solver"
 
     @property
     def is_converged(self) -> bool:
         return self.convergence_status == "converged"
+
+    @property
+    def certification_eligible(self) -> bool:
+        return (
+            self.is_converged
+            and self.evidence_source == "cae_solver"
+            and self.license_mode in PRODUCTION_LICENSE_MODES
+        )
 
     def value(self, name: str, unit: str | None = None) -> float:
         if name not in self.outputs:
@@ -55,8 +75,9 @@ class SolverEvidence:
 
     def as_dict(self) -> dict:
         return {
-            "source": "cae_solver",
+            "source": self.evidence_source,
             "path": self.path,
+            "batch_id": self.batch_id,
             "case_id": self.case_id,
             "product": self.product,
             "version": self.version,
@@ -65,36 +86,55 @@ class SolverEvidence:
             "model_id": self.model_id,
             "content_digest": self.content_digest,
             "input_digest": self.input_digest,
+            "setup_digest": self.setup_digest,
+            "binding_digest": self.binding_digest,
+            "capability_id": self.capability_id,
+            "native_result_path": self.native_result_path,
+            "native_result_digest": self.native_result_digest,
             "residual": self.residual,
+            "certification_eligible": self.certification_eligible,
         }
 
 
-@lru_cache(maxsize=32)
-def _load_cached(path: str, mtime_ns: int) -> tuple[dict, str]:
+def _load_payload(path: str) -> dict:
+    # Evidence files may be replaced rapidly by an exporter. Caching by path/mtime
+    # can validate stale content on filesystems with coarse timestamp resolution.
     with open(path, "r", encoding="utf-8") as fh:
-        text = fh.read()
-    return json.loads(text), text
+        return json.load(fh)
 
 
 def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _expected(actual: str, expected: str, label: str, path: str) -> None:
+    if expected and actual != expected:
+        raise SolverEvidenceError(f"{path}: {label}={actual!r}，预期为 {expected!r}")
+
+
 def load_solver_evidence(
     path: str,
     *,
     expected_item: str | None = None,
+    expected_case_id: str = "",
+    expected_batch_id: str = "",
     expected_model_id: str = "",
     expected_digest: str = "",
+    expected_input_digest: str = "",
+    expected_setup_digest: str = "",
+    expected_binding_digest: str = "",
+    expected_capability_id: str = "",
+    expected_native_result_digest: str = "",
+    required_outputs: dict[str, str] | None = None,
     require_converged: bool = True,
     require_authorized: bool = False,
+    require_native_evidence: bool = False,
 ) -> SolverEvidence:
     ap = os.path.abspath(path)
     if not os.path.isfile(ap):
         raise SolverEvidenceError(f"求解结果文件不存在：{ap}")
-    stat = os.stat(ap)
-    payload, _raw = _load_cached(ap, stat.st_mtime_ns)
-    if payload.get("schema_version") != "1.0.0":
+    payload = _load_payload(ap)
+    if not isinstance(payload, dict) or payload.get("schema_version") != "1.0.0":
         raise SolverEvidenceError(f"{ap}: schema_version 必须为 1.0.0")
     case_id = str(payload.get("case_id") or "")
     item = str(payload.get("check_item_id") or "")
@@ -102,24 +142,21 @@ def load_solver_evidence(
         raise SolverEvidenceError(f"{ap}: case_id/check_item_id 无效")
     if expected_item and item != expected_item:
         raise SolverEvidenceError(f"{ap}: 结果所属 {item}，当前检查要求 {expected_item}")
+    _expected(case_id, expected_case_id, "case_id", ap)
+    batch_id = str(payload.get("batch_id") or "")
+    _expected(batch_id, expected_batch_id, "batch_id", ap)
 
     solver = payload.get("solver") or {}
     if not isinstance(solver, dict):
         raise SolverEvidenceError(f"{ap}: solver 必须是对象")
     product = str(solver.get("product") or "")
     version = str(solver.get("version") or "")
-    license_mode = str(solver.get("license_mode") or "")
+    license_mode = str(solver.get("license_mode") or "").strip().casefold().replace("-", "_")
     if not _nonempty(product) or not _nonempty(version):
         raise SolverEvidenceError(f"{ap}: solver.product/version 不能为空")
-    if require_authorized and license_mode.casefold() not in {
-        "authorized",
-        "commercial",
-        "floating",
-        "node_locked",
-        "evaluation",
-    }:
+    if require_authorized and license_mode not in PRODUCTION_LICENSE_MODES:
         raise SolverEvidenceError(
-            f"{ap}: solver.license_mode={license_mode!r} 不是可接受的正式授权标记"
+            f"{ap}: solver.license_mode={license_mode!r} 不具备生产认证资格"
         )
     lowered = product.casefold()
     if any(word in lowered for word in ("mock", "simulated", "python", "formula only")):
@@ -152,19 +189,55 @@ def load_solver_evidence(
     model_id = str(identity.get("model_id") or "")
     content_digest = str(identity.get("content_digest") or "")
     input_digest = str(identity.get("input_digest") or "")
-    if expected_model_id and model_id != expected_model_id:
-        raise SolverEvidenceError(f"{ap}: model_id={model_id!r}，当前模型={expected_model_id!r}")
-    if expected_digest and content_digest != expected_digest:
-        raise SolverEvidenceError(
-            f"{ap}: content_digest={content_digest!r}，当前模型={expected_digest!r}"
-        )
+    _expected(model_id, expected_model_id, "model_id", ap)
+    _expected(content_digest, expected_digest, "content_digest", ap)
+    _expected(input_digest, expected_input_digest, "input_digest", ap)
+
+    setup_digest = str(payload.get("setup_digest") or "")
+    binding_digest = str(payload.get("binding_digest") or "")
+    capability_id = str(payload.get("capability_id") or "")
+    run = payload.get("run") or {}
+    if not isinstance(run, dict):
+        raise SolverEvidenceError(f"{ap}: run 必须是对象")
+    native_path = str(run.get("native_result_path") or run.get("result_file") or "")
+    native_digest = str(run.get("native_result_digest") or "")
+    _expected(setup_digest, expected_setup_digest, "setup_digest", ap)
+    _expected(binding_digest, expected_binding_digest, "binding_digest", ap)
+    _expected(capability_id, expected_capability_id, "capability_id", ap)
+    _expected(native_digest, expected_native_result_digest, "native_result_digest", ap)
 
     residual = payload.get("residual")
     if residual is not None:
-        if not isinstance(residual, (int, float)) or isinstance(residual, bool):
-            raise SolverEvidenceError(f"{ap}: residual 必须是数值或 null")
+        if (
+            not isinstance(residual, (int, float))
+            or isinstance(residual, bool)
+            or not math.isfinite(float(residual))
+        ):
+            raise SolverEvidenceError(f"{ap}: residual 必须是有限数值或 null")
         residual = float(residual)
-    return SolverEvidence(
+
+    if require_native_evidence:
+        if residual is None:
+            raise SolverEvidenceError(f"{ap}: 受信任结果必须包含有限收敛残差")
+        if not native_path or not native_digest:
+            raise SolverEvidenceError(f"{ap}: 缺少原生求解结果路径或摘要")
+        native_file = os.path.abspath(native_path)
+        if not os.path.isfile(native_file):
+            raise SolverEvidenceError(f"{ap}: 原生求解结果不存在：{native_file}")
+        digest = hashlib.sha256()
+        with open(native_file, "rb") as fh:
+            for block in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(block)
+        if digest.hexdigest() != native_digest:
+            raise SolverEvidenceError(f"{ap}: 原生求解结果摘要与文件内容不一致")
+
+    evidence_source = str(payload.get("evidence_source") or "cae_solver")
+    if evidence_source not in EVIDENCE_SOURCES:
+        raise SolverEvidenceError(f"{ap}: evidence_source={evidence_source!r} 无效")
+    if license_mode == "unverified" and evidence_source == "cae_solver":
+        evidence_source = "cae_smoke"
+
+    evidence = SolverEvidence(
         path=ap,
         case_id=case_id,
         check_item_id=item,
@@ -177,4 +250,14 @@ def load_solver_evidence(
         content_digest=content_digest,
         input_digest=input_digest,
         residual=residual,
+        batch_id=batch_id,
+        setup_digest=setup_digest,
+        binding_digest=binding_digest,
+        capability_id=capability_id,
+        native_result_path=native_path,
+        native_result_digest=native_digest,
+        evidence_source=evidence_source,
     )
+    for name, unit in (required_outputs or {}).items():
+        evidence.value(name, unit)
+    return evidence

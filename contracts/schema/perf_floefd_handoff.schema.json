@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harting.local/nxdrp/perf_floefd_handoff.schema.json",
+  "title": "PERF-01 Offline FloEFD Engineer Handoff",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "handoff_id",
+    "case_id",
+    "check_item_id",
+    "model_identity",
+    "source_geometry",
+    "face_roles",
+    "material",
+    "temperature_dependent_resistivity",
+    "electrical",
+    "convection",
+    "radiation",
+    "mesh",
+    "goals",
+    "probes",
+    "required_outputs",
+    "quality_requirements",
+    "capability",
+    "binding_digest",
+    "status",
+    "solver_run_performed",
+    "automation_supported",
+    "result_contract",
+    "not_done",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "handoff_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "case_id": {"type": "string", "minLength": 1},
+    "check_item_id": {"const": "PERF-01"},
+    "model_identity": {
+      "type": "object",
+      "required": ["model_id", "content_digest", "input_digest", "source", "nx_version"],
+      "properties": {
+        "model_id": {"type": "string"},
+        "content_digest": {"type": "string"},
+        "input_digest": {"type": "string"},
+        "source": {"type": "string"},
+        "nx_version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "source_geometry": {
+      "type": "object",
+      "required": ["source_part", "model_digest", "body_tags"],
+      "properties": {
+        "source_part": {"type": "string", "minLength": 1},
+        "model_digest": {"type": "string", "minLength": 1},
+        "body_tags": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "integer"}
+        },
+        "status": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "face_roles": {
+      "type": "object",
+      "required": ["electrical_inlet", "electrical_outlet", "convection", "radiation"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["face_ids", "status"],
+        "properties": {
+          "face_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"}
+          },
+          "body_ids": {"type": "array"},
+          "status": {"const": "confirmed"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "material": {
+      "type": "object",
+      "required": [
+        "material",
+        "density_kg_m3",
+        "thermal_conductivity_w_mk",
+        "specific_heat_j_kgk",
+        "electrical_resistivity_ohm_m",
+        "temperature_coefficient_1_k",
+        "emissivity"
+      ],
+      "properties": {
+        "material": {"type": "string", "minLength": 1},
+        "density_kg_m3": {"type": "number", "exclusiveMinimum": 0},
+        "thermal_conductivity_w_mk": {"type": "number", "exclusiveMinimum": 0},
+        "specific_heat_j_kgk": {"type": "number", "exclusiveMinimum": 0},
+        "electrical_resistivity_ohm_m": {"type": "number", "exclusiveMinimum": 0},
+        "temperature_coefficient_1_k": {"type": "number", "exclusiveMinimum": 0},
+        "emissivity": {"type": "number", "minimum": 0, "maximum": 1},
+        "provenance": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "temperature_dependent_resistivity": {
+      "type": "object",
+      "required": [
+        "temperature_dependent",
+        "reference_temperature_c",
+        "electrical_resistivity_ohm_m",
+        "temperature_coefficient_1_k",
+        "expression",
+        "provenance"
+      ],
+      "properties": {
+        "temperature_dependent": {"const": true},
+        "reference_temperature_c": {"type": "number"},
+        "electrical_resistivity_ohm_m": {"type": "number", "exclusiveMinimum": 0},
+        "temperature_coefficient_1_k": {"type": "number", "exclusiveMinimum": 0},
+        "expression": {"type": "string", "minLength": 1},
+        "provenance": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "electrical": {
+      "type": "object",
+      "required": [
+        "current_a",
+        "current_face_role",
+        "current_face_ids",
+        "ground_face_role",
+        "ground_face_ids",
+        "ground_potential_v"
+      ],
+      "properties": {
+        "current_a": {"type": "number"},
+        "current_face_role": {"const": "electrical_inlet"},
+        "current_face_ids": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "ground_face_role": {"const": "electrical_outlet"},
+        "ground_face_ids": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "ground_potential_v": {"const": 0.0}
+      },
+      "additionalProperties": false
+    },
+    "convection": {
+      "type": "object",
+      "required": ["face_role", "face_ids", "ambient_temperature_c", "heat_transfer_coefficient_w_m2k"],
+      "properties": {
+        "face_role": {"const": "convection"},
+        "face_ids": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "ambient_temperature_c": {"type": "number"},
+        "heat_transfer_coefficient_w_m2k": {"type": "number", "exclusiveMinimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "radiation": {
+      "type": "object",
+      "required": ["face_role", "face_ids", "emissivity", "ambient_temperature_c"],
+      "properties": {
+        "face_role": {"const": "radiation"},
+        "face_ids": {"$ref": "#/$defs/nonEmptyStringArray"},
+        "emissivity": {"type": "number", "minimum": 0, "maximum": 1},
+        "ambient_temperature_c": {"type": "number"}
+      },
+      "additionalProperties": false
+    },
+    "mesh": {
+      "type": "object",
+      "required": ["global", "local_refinement", "medium_and_fine_study_required"],
+      "properties": {
+        "global": {
+          "type": "object",
+          "required": ["type", "element_size_mm", "status"],
+          "properties": {
+            "type": {"const": "3d_conformal"},
+            "element_size_mm": {"type": ["number", "null"], "exclusiveMinimum": 0},
+            "status": {"enum": ["requested", "engineer_to_define"]}
+          },
+          "additionalProperties": false
+        },
+        "local_refinement": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["region_id", "face_role", "face_ids", "reason"],
+            "properties": {
+              "region_id": {"type": "string"},
+              "face_role": {"type": ["string", "null"]},
+              "face_ids": {"type": "array", "items": {"type": "string"}},
+              "selection_status": {"type": "string"},
+              "reason": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "medium_and_fine_study_required": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "goals": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/goal"}
+    },
+    "probes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["probe_id", "face_role", "face_ids", "quantities"],
+        "properties": {
+          "probe_id": {"type": "string"},
+          "face_role": {"type": ["string", "null"]},
+          "face_ids": {"type": "array", "items": {"type": "string"}},
+          "selection_status": {"type": "string"},
+          "quantities": {"$ref": "#/$defs/nonEmptyStringArray"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "required_outputs": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["output_key", "unit", "definition", "native_key"],
+        "properties": {
+          "output_key": {
+            "enum": [
+              "maximum_temperature_c",
+              "delta_t_c",
+              "total_resistance_ohm",
+              "joule_power_w",
+              "voltage_drop_v"
+            ]
+          },
+          "unit": {"enum": ["degC", "ohm", "W", "V"]},
+          "definition": {"type": "string", "minLength": 1},
+          "native_key": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "quality_requirements": {
+      "type": "object",
+      "required": [
+        "convergence_status",
+        "residual_required",
+        "mesh_sensitivity_relative_change_pct_max",
+        "energy_balance_relative_error_max",
+        "medium_and_fine_mesh_comparison_required",
+        "native_result_keys_must_be_confirmed"
+      ],
+      "properties": {
+        "convergence_status": {"const": "converged"},
+        "residual_required": {"const": true},
+        "mesh_sensitivity_relative_change_pct_max": {"const": 2.0},
+        "energy_balance_relative_error_max": {"const": 0.02},
+        "medium_and_fine_mesh_comparison_required": {"const": true},
+        "native_result_keys_must_be_confirmed": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "capability": {
+      "type": "object",
+      "required": [
+        "release",
+        "check_item_id",
+        "mode",
+        "status",
+        "verified",
+        "template_names",
+        "solver_name",
+        "analysis_name",
+        "solution_name",
+        "native_result_mapping",
+        "native_result_provenance"
+      ],
+      "properties": {
+        "release": {"const": "NX 2606.3002"},
+        "check_item_id": {"const": "PERF-01"},
+        "mode": {"const": "thermal_with_joule"},
+        "status": {"const": "unverified"},
+        "verified": {"const": false},
+        "native_result_mapping": {
+          "type": "object",
+          "additionalProperties": {"type": ["string", "null"]}
+        },
+        "native_result_provenance": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "binding_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {"const": "ready_for_engineer"},
+    "solver_run_performed": {"const": false},
+    "automation_supported": {"const": false},
+    "result_contract": {"const": "contracts/schema/perf_solver_result.schema.json"},
+    "not_done": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "generator",
+        "offline_only",
+        "case_id",
+        "binding_digest",
+        "capability_catalog_id",
+        "native_result_mapping_status"
+      ],
+      "properties": {
+        "generator": {"const": "nxdrp.checkers.performance.floefd_handoff"},
+        "offline_only": {"const": true},
+        "case_id": {"type": "string"},
+        "binding_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "capability_catalog_id": {"type": "string"},
+        "native_result_mapping_status": {"const": "unverified"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "goal": {
+      "type": "object",
+      "required": ["goal_id", "output_key", "unit", "selection", "native_key"],
+      "properties": {
+        "goal_id": {"type": "string", "minLength": 1},
+        "output_key": {
+          "enum": [
+            "maximum_temperature_c",
+            "delta_t_c",
+            "total_resistance_ohm",
+            "joule_power_w",
+            "voltage_drop_v"
+          ]
+        },
+        "unit": {"enum": ["degC", "ohm", "W", "V"]},
+        "selection": {"type": "string", "minLength": 1},
+        "native_key": {"type": ["string", "null"]},
+        "definition": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

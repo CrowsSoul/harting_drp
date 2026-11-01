@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import math
 import os
@@ -21,7 +22,12 @@ import random
 import statistics
 from datetime import datetime, timezone
 from ...contracts import RuleBook
-from .cae_bindings import binding_digest, create_binding_draft, validate_bindings
+from .cae_bindings import (
+    binding_digest,
+    create_binding_draft,
+    load_material_library,
+    validate_bindings,
+)
 from .perf01_current_temp import evaluate_formula as evaluate_perf01_formula
 from .perf01_current_temp import _formula_inputs as perf01_inputs
 from .perf02_insertion_force import _contact_inputs, evaluate_contact
@@ -42,6 +48,8 @@ AUTHORIZED_LICENSE_MODES = {
     "node_locked",
     "evaluation",
 }
+PRODUCTION_LICENSE_MODES = AUTHORIZED_LICENSE_MODES - {"evaluation"}
+COMPLETED_STAGE_STATUSES = {"complete", "completed", "done", "ok", "success", "succeeded"}
 
 
 def _utc_now() -> str:
@@ -71,10 +79,21 @@ def _lhs(rng: random.Random, low: float, high: float, count: int, log_scale: boo
     return values
 
 
-def _case_catalog() -> dict[str, str]:
+def _case_definitions() -> dict[str, dict]:
     with open(CASES_PATH, "r", encoding="utf-8") as fh:
         payload = json.load(fh)
-    return {item["check_item_id"]: item["case_id"] for item in payload["cases"]}
+    return {item["check_item_id"]: item for item in payload["cases"]}
+
+
+def _case_catalog() -> dict[str, str]:
+    return {item: definition["case_id"] for item, definition in _case_definitions().items()}
+
+
+def _mesh_sensitivity_limits() -> dict[str, float]:
+    return {
+        item: float(definition["acceptance"]["mesh_sensitivity_max_pct"])
+        for item, definition in _case_definitions().items()
+    }
 
 
 def _action_templates() -> dict[str, dict]:
@@ -120,47 +139,59 @@ def _perf01_case(index: int, values: dict[str, list[float]], materials: list[str
             if key not in {"area_mm2", "length_mm", "rho_ohm_m", "current_a", "h_w_m2k"}
         },
     )
-    output_names = (
-        "delta_t_c",
-        "maximum_temperature_c",
-        "total_resistance_ohm",
-        "joule_power_w",
-        "voltage_drop_v",
-    )
     expected = {
-        "delta_t_c": result.values["delta_t_c"],
         "maximum_temperature_c": result.values["absolute_temperature_c"],
+        "delta_t_c": result.values["delta_t_c"],
         "total_resistance_ohm": result.values["total_resistance_ohm"],
         "joule_power_w": result.values["power_w"],
         "voltage_drop_v": result.values["voltage_drop_v"],
+    }
+    required_outputs = {
+        "maximum_temperature_c": "degC",
+        "delta_t_c": "degC",
+        "total_resistance_ohm": "ohm",
+        "joule_power_w": "W",
+        "voltage_drop_v": "V",
     }
     return {
         "case_id": f"PERF01-ET-{index + 1:04d}",
         "solver_case_id": case_id,
         "check_item_id": "PERF-01",
         "material": material,
+        "solver_setup": {
+            "analysis_type": "thermal_with_joule",
+            "analysis_mode": "steady",
+            "physics_domain": "solid",
+            "joule_heating": True,
+        },
         "formula_inputs": inputs,
         "geometry_request": {
             "type": "cylinder",
             "diameter_mm": 2.0 * math.sqrt(inputs["area_mm2"] / math.pi),
             "length_mm": inputs["length_mm"],
+            "axis": "X",
         },
         "boundary_conditions": {
             "current_a": inputs["current_a"],
+            "outlet_voltage_v": 0.0,
             "ambient_temperature_c": inputs["ambient_temp_c"],
             "convection_h_w_m2k": inputs["h_w_m2k"],
             "radiation_emissivity": inputs["emissivity"],
             "contact_resistance_ohm_mm2": inputs["contact_resistance_ohm_mm2"],
+            "electrical_inlet": {"role": "electrical_inlet", "current_a": inputs["current_a"]},
+            "electrical_outlet": {"role": "electrical_outlet", "voltage_v": 0.0},
+            "convection": {
+                "role": "convection",
+                "ambient_temperature_c": inputs["ambient_temp_c"],
+                "h_w_m2k": inputs["h_w_m2k"],
+            },
+            "radiation": {"role": "radiation", "emissivity": inputs["emissivity"]},
         },
-        "formula_outputs": dict(zip(output_names, expected.values())),
+        "required_outputs": required_outputs,
+        "required_output_units": dict(required_outputs),
+        "expected_units": dict(required_outputs),
         "expected_values": expected,
-        "expected_units": {
-            "delta_t_c": "degC",
-            "maximum_temperature_c": "degC",
-            "total_resistance_ohm": "ohm",
-            "joule_power_w": "W",
-            "voltage_drop_v": "V",
-        },
+        "formula_outputs": dict(expected),
         "formula_decisions": _decision_payload(result),
     }
 
@@ -168,7 +199,7 @@ def _perf01_case(index: int, values: dict[str, list[float]], materials: list[str
 def _perf02_case(index: int, values: dict[str, list[float]], materials: list[str], params: dict, case_id: str) -> dict:
     material = materials[index % len(materials)]
     e_gpa = params["materials"][material]["e_gpa"]
-    spec = {
+    rule_spec = {
         "length_mm": values["length_mm"][index],
         "width_mm": values["width_mm"][index],
         "thickness_mm": values["thickness_mm"][index],
@@ -177,41 +208,133 @@ def _perf02_case(index: int, values: dict[str, list[float]], materials: list[str
         "lead_angle_deg": params["lead_angle_deg"],
         "friction_coeff": values["friction_coeff"][index],
     }
-    inputs = _contact_inputs(spec, e_gpa, params)
-    result = evaluate_contact(spec, e_gpa, params, formula=load_formula("PERF-02"))
+    modeled_spec = {**rule_spec, "contacts": 1.0}
+    inputs = _contact_inputs(modeled_spec, e_gpa, params)
+    formula = load_formula("PERF-02")
+    result = evaluate_contact(modeled_spec, e_gpa, params, formula=formula)
+    rule_result = evaluate_contact(rule_spec, e_gpa, params, formula=formula)
     expected = {
         "insertion_force_n": result.values["insertion_force_n"],
         "withdrawal_force_n": result.values["withdrawal_force_n"],
         "maximum_normal_contact_force_n": result.values["normal_force_n"],
     }
+    expected_rule_values = {
+        "insertion_force_n": rule_result.values["insertion_force_n"],
+        "withdrawal_force_n": rule_result.values["withdrawal_force_n"],
+        "maximum_normal_contact_force_n": rule_result.values["normal_force_n"],
+    }
+    expected_units = {name: "N" for name in expected}
+    required_outputs = {
+        **expected_units,
+        "maximum_penetration_mm": "mm",
+        "maximum_equivalent_stress_mpa": "MPa",
+    }
+    stroke = 0.5 * rule_spec["length_mm"]
+    search_distance = max(rule_spec["overlap_mm"], rule_spec["thickness_mm"])
+    slope = math.tan(math.radians(rule_spec["lead_angle_deg"]))
+    contact_travel = stroke - rule_spec["overlap_mm"] / slope
+    deflection_travel = rule_spec["overlap_mm"] / slope
+    if contact_travel <= 0:
+        raise ValueError("插入行程必须先建立接触，再形成法向过盈")
     return {
         "case_id": f"PERF02-CONTACT-{index + 1:04d}",
         "solver_case_id": case_id,
         "check_item_id": "PERF-02",
         "material": material,
+        "solver_setup": {
+            "solution_card": "SOL 401",
+            "solution_type": "SOL 401 Multi-Step Nonlinear",
+            "large_displacement": True,
+        },
         "formula_inputs": inputs,
+        "rule_formula_inputs": _contact_inputs(rule_spec, e_gpa, params),
         "geometry_request": {
             "type": "cantilever_contact_pair",
-            "length_mm": spec["length_mm"],
-            "width_mm": spec["width_mm"],
-            "thickness_mm": spec["thickness_mm"],
-            "interference_mm": spec["overlap_mm"],
+            "length_mm": rule_spec["length_mm"],
+            "width_mm": rule_spec["width_mm"],
+            "thickness_mm": rule_spec["thickness_mm"],
+            "normal_overlap_mm": rule_spec["overlap_mm"],
+            "insertion_stroke_mm": stroke,
+            "lead_angle_deg": rule_spec["lead_angle_deg"],
+            "target_slope_deg": rule_spec["lead_angle_deg"],
+            "modeled_contact_count": 1,
+            "axis_convention": {"length": "X", "width": "Y", "thickness_and_normal_overlap": "Z"},
         },
         "contact_conditions": {
             "method": "penalty",
             "friction_model": "coulomb",
-            "friction_coefficient": spec["friction_coeff"],
-            "contact_count": spec["contacts"],
-            "lead_angle_deg": spec["lead_angle_deg"],
+            "friction_coefficient": rule_spec["friction_coeff"],
+            "contact_count": 1,
+            "modeled_contact_count": 1,
+            "rule_contact_count": rule_spec["contacts"],
+            "lead_angle_deg": rule_spec["lead_angle_deg"],
+            "normal_overlap_mm": rule_spec["overlap_mm"],
+            "insertion_stroke_mm": stroke,
+            "insertion_direction": "-X",
+            "contact_travel_mm": contact_travel,
+            "deflection_travel_mm": deflection_travel,
+            "penalty_stiffness_n_mm3": 1000.0 * e_gpa / rule_spec["thickness_mm"],
+            "search_distance_mm": search_distance,
+            "large_displacement": True,
+            "load_steps": ["establish_contact", "insert", "withdraw"],
         },
+        "mesh": {
+            "element_type": "structural solid",
+            "element_size_mm": min(rule_spec["thickness_mm"] * 0.5, rule_spec["length_mm"] / 20.0),
+            "contact_refinement": True,
+        },
+        "constraints": {
+            "fixed_root": "all_degrees_of_freedom",
+            "driven_displacement": {
+                "axis": "X",
+                "direction": "-X",
+                "stroke_mm": stroke,
+                "target_role": "driven_face",
+            },
+        },
+        "load_steps": [
+            {
+                "step": 1,
+                "action": "establish_contact",
+                "axis": "X",
+                "displacement_mm": -contact_travel,
+                "output": "initial_contact",
+            },
+            {
+                "step": 2,
+                "action": "insert",
+                "axis": "X",
+                "displacement_mm": -deflection_travel,
+                "normal_overlap_mm": rule_spec["overlap_mm"],
+                "output": "insertion_force_n",
+            },
+            {
+                "step": 3,
+                "action": "withdraw",
+                "axis": "X",
+                "displacement_mm": stroke,
+                "output": "withdrawal_force_n",
+            },
+        ],
+        "required_outputs": required_outputs,
+        "required_output_units": dict(required_outputs),
+        "expected_units": expected_units,
         "expected_values": expected,
-        "expected_units": {
-            "insertion_force_n": "N",
-            "withdrawal_force_n": "N",
-            "maximum_normal_contact_force_n": "N",
+        "expected_rule_values": expected_rule_values,
+        "formula_scaling": {
+            "modeled_contact_count": 1.0,
+            "rule_contact_count": float(rule_spec["contacts"]),
+            "method": "linear_contact_count_for_total_forces",
+            "output_factors": {
+                "insertion_force_n": float(rule_spec["contacts"]),
+                "withdrawal_force_n": float(rule_spec["contacts"]),
+                "maximum_normal_contact_force_n": 1.0,
+            },
+            "quantities": ["insertion_force_n", "withdrawal_force_n"],
         },
-        "formula_outputs": result.values,
+        "formula_outputs": dict(result.values),
         "formula_decisions": _decision_payload(result),
+        "rule_formula_decisions": _decision_payload(rule_result),
     }
 
 
@@ -269,14 +392,23 @@ def generate_batch(
         "items": list(items),
         "authorization": {
             "required_for_calibration": True,
-            "accepted_license_modes": sorted(AUTHORIZED_LICENSE_MODES),
+            "accepted_license_modes": sorted(PRODUCTION_LICENSE_MODES),
             "note": "求解结果必须声明正式授权，否则只允许做接口联调，不进入认证报告。",
         },
         "cases": cases,
     }
 
 
+def _positive_geometry_value(geometry: dict, name: str) -> float:
+    value = geometry.get(name)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or float(value) <= 0:
+        raise ValueError(f"几何参数 {name} 必须是大于 0 的有限数值")
+    return float(value)
+
+
 def build_geometry_request(case: dict, out_path: str) -> dict:
+    if not str(out_path or "").strip():
+        raise ValueError("out_path 不能为空")
     geometry = case.get("geometry_request") or {}
     kind = geometry.get("type")
     if kind == "cylinder":
@@ -284,19 +416,50 @@ def build_geometry_request(case: dict, out_path: str) -> dict:
             "case_id": case["case_id"],
             "kind": "cylinder",
             "out_path": os.path.abspath(out_path),
-            "diameter_mm": float(geometry["diameter_mm"]),
-            "length_mm": float(geometry["length_mm"]),
+            "diameter_mm": _positive_geometry_value(geometry, "diameter_mm"),
+            "length_mm": _positive_geometry_value(geometry, "length_mm"),
         }
     if kind == "cantilever_contact_pair":
-        return {
+        conditions = case.get("contact_conditions") or {}
+        normalized = dict(geometry)
+        if "normal_overlap_mm" not in normalized and "interference_mm" in normalized:
+            normalized["normal_overlap_mm"] = normalized["interference_mm"]
+        if "insertion_stroke_mm" not in normalized:
+            normalized["insertion_stroke_mm"] = conditions.get(
+                "insertion_stroke_mm", 0.5 * _positive_geometry_value(normalized, "length_mm")
+            )
+        if "lead_angle_deg" not in normalized:
+            normalized["lead_angle_deg"] = conditions.get("lead_angle_deg")
+        raw_angle = normalized.get("lead_angle_deg")
+        if not isinstance(raw_angle, (int, float)) or isinstance(raw_angle, bool) or not math.isfinite(float(raw_angle)):
+            raise ValueError("lead_angle_deg 必须是有限数值")
+        request = {
             "case_id": case["case_id"],
             "kind": "cantilever_contact_pair",
             "out_path": os.path.abspath(out_path),
-            "length_mm": float(geometry["length_mm"]),
-            "width_mm": float(geometry["width_mm"]),
-            "thickness_mm": float(geometry["thickness_mm"]),
-            "plate_gap_mm": float(geometry["interference_mm"]) * 0.5,
+            "length_mm": _positive_geometry_value(normalized, "length_mm"),
+            "width_mm": _positive_geometry_value(normalized, "width_mm"),
+            "thickness_mm": _positive_geometry_value(normalized, "thickness_mm"),
+            "normal_overlap_mm": _positive_geometry_value(normalized, "normal_overlap_mm"),
+            "insertion_stroke_mm": _positive_geometry_value(normalized, "insertion_stroke_mm"),
+            "lead_angle_deg": float(normalized["lead_angle_deg"]),
+            "target_slope_deg": float(normalized["lead_angle_deg"]),
+            "modeled_contact_count": 1,
+            "axis_convention": {"length": "X", "width": "Y", "thickness_and_normal_overlap": "Z"},
         }
+        angle = request["lead_angle_deg"]
+        if not math.isfinite(angle) or not 0.0 < angle < 90.0:
+            raise ValueError("lead_angle_deg 必须在 0 到 90 度之间")
+        slope = math.tan(math.radians(angle))
+        contact_travel = request["insertion_stroke_mm"] - request["normal_overlap_mm"] / slope
+        if contact_travel <= 0:
+            raise ValueError("插入行程必须先建立接触，再形成法向过盈，且初始几何不得穿透")
+        request["insertion_direction"] = "-X"
+        request["contact_travel_mm"] = contact_travel
+        request["deflection_travel_mm"] = request["normal_overlap_mm"] / slope
+        if geometry.get("modeled_contact_count", 1) != 1:
+            raise ValueError("PERF-02 参数化工况只能建模一个接触对")
+        return request
     raise ValueError(f"不支持的几何类型：{kind}")
 
 
@@ -336,6 +499,7 @@ def materialize_batch(batch_path: str, out_dir: str) -> dict:
             "geometry_request_path": geometry_path,
             "simcenter_actions_path": actions_path,
             "bindings_path": bindings_path,
+            "model_id": binding["source_geometry"]["model_id"],
             "source_part": geometry["out_path"],
             "status": "ready_for_geometry",
         })
@@ -351,8 +515,47 @@ def materialize_batch(batch_path: str, out_dir: str) -> dict:
     return index
 
 
+def _run_state_stages(root: str, item: dict) -> dict | None:
+    case_dir = os.path.abspath(item["directory"])
+    path = os.path.join(case_dir, "run_state.json")
+    if not os.path.isfile(path):
+        path = os.path.join(root, "run_state.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        state = json.load(fh)
+    if path == os.path.join(root, "run_state.json"):
+        cases = state.get("cases")
+        if isinstance(cases, dict):
+            state = cases.get(item["case_id"]) or {}
+        elif isinstance(cases, list):
+            state = next((value for value in cases if value.get("case_id") == item["case_id"]), {})
+    stages = state.get("stages")
+    if stages is None and isinstance(state.get(item["case_id"]), dict):
+        stages = state[item["case_id"]].get("stages")
+    if stages is None:
+        return None
+    if not isinstance(stages, dict):
+        raise ValueError(f"{path}: stages 必须是对象")
+    return stages
+
+
+def _stage_status(stages: dict, *names: str) -> str:
+    for name in names:
+        record = stages.get(name)
+        if isinstance(record, str):
+            return record.casefold()
+        if isinstance(record, dict):
+            return str(record.get("status") or "").casefold()
+    return ""
+
+
+def _stage_done(stages: dict, *names: str) -> bool:
+    return _stage_status(stages, *names) in COMPLETED_STAGE_STATUSES
+
+
 def refresh_workspace_status(workspace: str) -> dict:
-    """根据工作目录中实际存在的产物刷新每个工况的状态。"""
+    """刷新工况状态；有 run_state 时以求解/导出阶段记录为准。"""
     root = os.path.abspath(workspace)
     index_path = os.path.join(root, "index.json")
     if not os.path.isfile(index_path):
@@ -365,7 +568,9 @@ def refresh_workspace_status(workspace: str) -> dict:
         prt_path = item["source_part"]
         fem_files = glob.glob(os.path.join(case_dir, "*.fem"))
         sim_files = glob.glob(os.path.join(case_dir, "*.sim"))
-        result_files = glob.glob(os.path.join(case_dir, "solver_result.json"))
+        # Result files are versioned by setup_id so re-prepare can coexist with
+        # earlier evidence files.
+        result_files = glob.glob(os.path.join(case_dir, "solver_result*.json"))
         action_files = glob.glob(os.path.join(case_dir, "simcenter_actions.json"))
         bindings_files = glob.glob(os.path.join(case_dir, "bindings.json"))
         binding_validation = {"valid": False, "errors": ["缺少 bindings.json"], "warnings": []}
@@ -373,26 +578,54 @@ def refresh_workspace_status(workspace: str) -> dict:
             with open(bindings_files[0], "r", encoding="utf-8") as fh:
                 binding = json.load(fh)
             binding_validation = validate_bindings(binding)
-        if result_files and fem_files and sim_files:
-            status = "solved_result_available"
-        elif sim_files and fem_files:
-            status = "simcenter_container_ready"
-        elif prt_path and os.path.isfile(prt_path) and not binding_validation["valid"]:
-            status = "bindings_incomplete"
-        elif prt_path and os.path.isfile(prt_path) and binding_validation["valid"]:
-            status = "ready_for_simcenter"
-        elif prt_path and os.path.isfile(prt_path):
-            status = "geometry_ready"
-        elif action_files:
-            status = "ready_for_geometry"
+        stages = _run_state_stages(root, item)
+        has_geometry = os.path.isfile(prt_path)
+        if stages is not None:
+            failed = next(
+                (name for name, record in stages.items() if _stage_status(stages, name) in {"failed", "error"}),
+                "",
+            )
+            solved = _stage_done(stages, "solve", "solved")
+            exported = _stage_done(stages, "export", "exported")
+            fem_ready = _stage_done(stages, "fem", "mesh", "setup")
+            sim_ready = _stage_done(stages, "sim", "setup")
+            geometry_ready = _stage_done(stages, "geometry", "cad", "prepare")
+            if failed:
+                status = f"{failed}_failed"
+            elif exported:
+                status = "solver_exported"
+            elif solved:
+                status = "solved_result_available"
+            elif fem_ready and sim_ready:
+                status = "simcenter_container_ready"
+            elif geometry_ready:
+                status = "ready_for_simcenter" if binding_validation["valid"] else "bindings_incomplete"
+            elif action_files:
+                status = "ready_for_geometry"
+            else:
+                status = "incomplete_workspace"
         else:
-            status = "incomplete_workspace"
+            # Legacy artifact names are informational only. Without a signed stage
+            # record, FEM/SIM/result files cannot prove a solve or export occurred.
+            solved = False
+            exported = False
+            if sim_files and fem_files:
+                status = "simcenter_container_ready"
+            elif has_geometry:
+                status = "ready_for_simcenter" if binding_validation["valid"] else "bindings_incomplete"
+            elif action_files:
+                status = "ready_for_geometry"
+            else:
+                status = "incomplete_workspace"
         item.update({
             "status": status,
-            "has_geometry": os.path.isfile(prt_path),
+            "has_geometry": has_geometry,
             "has_fem": bool(fem_files),
             "has_sim": bool(sim_files),
             "has_solver_result": bool(result_files),
+            "solved": solved,
+            "exported": exported,
+            "run_state_stages": stages,
             "bindings_valid": bool(binding_validation["valid"]),
             "binding_errors": list(binding_validation["errors"]),
         })
@@ -429,17 +662,202 @@ def _license_mode(evidence: SolverEvidence, allow_unverified_for_smoke: bool = F
     )
 
 
+def _payload_digest(payload: dict) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _case_manifest(payload: dict, case_id: str) -> dict:
+    if payload.get("case_id") == case_id:
+        return payload
+    cases = payload.get("cases")
+    if isinstance(cases, dict):
+        value = cases.get(case_id)
+        if isinstance(value, dict):
+            return value
+    elif isinstance(cases, list):
+        value = next((item for item in cases if item.get("case_id") == case_id), None)
+        if isinstance(value, dict):
+            return value
+    raise ValueError(f"受信任清单中没有 {case_id}")
+
+
+def _manifest_model_identity(manifest: dict, case_id: str) -> dict:
+    identity = dict(manifest.get("model_identity") or {})
+    for name in ("model_id", "content_digest", "input_digest"):
+        if manifest.get(name) and not identity.get(name):
+            identity[name] = manifest[name]
+    identity.setdefault("model_id", case_id)
+    if manifest.get("case") and not identity.get("input_digest"):
+        identity["input_digest"] = _payload_digest(manifest["case"])
+    return identity
+
+
+def _manifest_setup_identity(manifest: dict) -> dict:
+    identity = dict(manifest.get("setup_identity") or {})
+    binding = manifest.get("binding") or {}
+    if binding.get("digest") and not identity.get("binding_digest"):
+        identity["binding_digest"] = binding["digest"]
+    for name in ("setup_id", "setup_digest", "binding_digest", "capability_id", "fem_path", "sim_path"):
+        if manifest.get(name) and not identity.get(name):
+            identity[name] = manifest[name]
+    capability = manifest.get("capability") or {}
+    if capability.get("capability_id") and not identity.get("capability_id"):
+        identity["capability_id"] = capability["capability_id"]
+    identity.setdefault(
+        "material_library_status", str(load_material_library().get("status") or "unknown"),
+    )
+    return identity
+
+
+def _workspace_identity(workspace: str, case_id: str) -> dict:
+    index_path = os.path.abspath(workspace)
+    if os.path.isdir(index_path):
+        index_path = os.path.join(index_path, "index.json")
+    root = os.path.dirname(index_path)
+    with open(index_path, "r", encoding="utf-8") as fh:
+        index = json.load(fh)
+    entry = _case_manifest(index, case_id)
+    binding_path = entry.get("bindings_path") or os.path.join(
+        entry.get("directory") or os.path.join(root, case_id), "bindings.json"
+    )
+    if not os.path.isabs(binding_path):
+        binding_path = os.path.join(root, binding_path)
+    with open(binding_path, "r", encoding="utf-8") as fh:
+        binding = json.load(fh)
+    if binding.get("case_id") != case_id:
+        raise ValueError(f"工作区绑定不属于 {case_id}")
+    validation = validate_bindings(binding, strict=True)
+    if not validation["valid"]:
+        raise ValueError("工作区绑定未通过严格校验：" + "；".join(validation["errors"]))
+    geometry = binding["source_geometry"]
+    if entry.get("source_part") and not os.path.normcase(os.path.abspath(entry["source_part"])) == os.path.normcase(
+        os.path.abspath(geometry["source_part"])
+    ):
+        raise ValueError("工作区 index 与绑定的 source_part 不一致")
+    binding_digest_value = binding["binding_digest"]
+    if entry.get("binding_digest") and entry["binding_digest"] != binding_digest_value:
+        raise ValueError("工作区 index 的 binding_digest 已过期")
+    case_path = entry.get("case_path") or os.path.join(entry.get("directory") or root, "case.json")
+    if not os.path.isabs(case_path):
+        case_path = os.path.join(root, case_path)
+    with open(case_path, "r", encoding="utf-8") as fh:
+        case_payload = json.load(fh)
+    if case_payload.get("case_id") != case_id:
+        raise ValueError("工作区 case.json 与结果 case_id 不一致")
+    return {
+        "model_identity": {
+            "model_id": str(entry.get("model_id") or geometry.get("model_id") or case_id),
+            "content_digest": geometry["model_digest"],
+            "input_digest": _payload_digest(case_payload),
+        },
+        "setup_identity": {
+            "binding_digest": binding_digest_value,
+            "material_library_status": str(load_material_library().get("status") or "unknown"),
+        },
+    }
+
+
+def _merge_trusted_identity(base: dict, extra: dict) -> dict:
+    merged = {key: dict(value) for key, value in base.items()}
+    for section in ("model_identity", "setup_identity"):
+        target = merged.setdefault(section, {})
+        for key, value in (extra.get(section) or {}).items():
+            if value in (None, ""):
+                continue
+            if target.get(key) not in (None, "") and target[key] != value:
+                raise ValueError(f"受信任清单的 {section}.{key} 不一致")
+            target[key] = value
+    return merged
+
+
+def _trusted_identity(
+    case_id: str,
+    workspace: str | None,
+    setup_manifest: str | dict | None,
+) -> dict | None:
+    identity = _workspace_identity(workspace, case_id) if workspace else {}
+    if setup_manifest:
+        if isinstance(setup_manifest, dict):
+            manifest = setup_manifest
+        else:
+            manifest_path = os.path.abspath(setup_manifest)
+            if os.path.isdir(manifest_path):
+                manifest_path = os.path.join(manifest_path, "setup_manifest.json")
+            with open(manifest_path, "r", encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        stored_setup_digest = str(manifest.get("setup_digest") or "")
+        if stored_setup_digest:
+            unsigned = dict(manifest)
+            unsigned.pop("setup_digest", None)
+            if _payload_digest(unsigned) != stored_setup_digest:
+                raise ValueError("setup manifest 内容与 setup_digest 不一致")
+        manifest = _case_manifest(manifest, case_id)
+        embedded = (manifest.get("binding") or {}).get("payload")
+        if embedded is not None:
+            if embedded.get("case_id") != case_id or embedded.get("binding_digest") != (manifest.get("binding") or {}).get("digest"):
+                raise ValueError("setup manifest 内嵌 binding 身份不一致")
+            if binding_digest(embedded) != embedded["binding_digest"]:
+                raise ValueError("setup manifest 内嵌 binding_digest 无效")
+            validation = validate_bindings(embedded, strict=True)
+            if not validation["valid"]:
+                raise ValueError("setup manifest 内嵌 binding 未通过严格校验")
+        extra = {
+            "model_identity": _manifest_model_identity(manifest, case_id),
+            "setup_identity": _manifest_setup_identity(manifest),
+        }
+        identity = _merge_trusted_identity(identity, extra)
+    if not identity:
+        return None
+    model = identity.get("model_identity") or {}
+    setup = identity.get("setup_identity") or {}
+    if not model.get("model_id") or not model.get("content_digest"):
+        raise ValueError("受信任清单缺少 model_id/content_digest")
+    if not model.get("input_digest") and not setup.get("binding_digest"):
+        raise ValueError("受信任清单缺少 binding/input digest")
+    model.setdefault("input_digest", setup["binding_digest"])
+    setup.setdefault("binding_digest", model["input_digest"])
+    return identity
+
+
+def _verify_setup_identity(payload: dict, evidence: SolverEvidence, trusted: dict) -> None:
+    setup = payload.get("setup_identity") or {}
+    if not isinstance(setup, dict):
+        raise ValueError("setup_identity 必须是对象")
+    expected_setup = trusted.get("setup_identity") or {}
+    expected_binding = expected_setup.get("binding_digest")
+    actual_binding = (
+        setup.get("binding_digest")
+        or payload.get("binding_digest")
+        or getattr(evidence, "binding_digest", "")
+        or evidence.input_digest
+    )
+    if expected_binding and actual_binding != expected_binding:
+        raise ValueError("结果 binding_digest 与受信任绑定不一致")
+    expected_input = (trusted.get("model_identity") or {}).get("input_digest")
+    if expected_input and evidence.input_digest != expected_input:
+        raise ValueError("结果 input_digest 与受信任 case 输入不一致")
+    expected_setup_digest = expected_setup.get("setup_digest")
+    actual_setup_digest = setup.get("setup_digest") or payload.get("setup_digest") or getattr(evidence, "setup_digest", "")
+    if expected_setup_digest and actual_setup_digest != expected_setup_digest:
+        raise ValueError("结果 setup_digest 与受信任 setup manifest 不一致")
+
+
 def ingest_results(
     batch_path: str,
     results_path: str,
     *,
     allow_unverified_for_smoke: bool = False,
+    workspace: str | None = None,
+    setup_manifest: str | dict | None = None,
 ) -> dict:
+    """读取结果；只有受信任工作区/设置清单验证的生产结果可进入认证。"""
     with open(batch_path, "r", encoding="utf-8") as fh:
         batch = json.load(fh)
     case_map = {item["case_id"]: item for item in batch.get("cases", [])}
     records = []
     rejected = []
+    seen_case_ids = set()
     for path in _iter_result_files(results_path):
         try:
             with open(path, "r", encoding="utf-8") as fh:
@@ -447,23 +865,72 @@ def ingest_results(
             case_id = str(payload.get("case_id") or "")
             case = case_map.get(case_id)
             if case is None:
-                rejected.append({"path": path, "reason": "case_id 不在当前 batch 中"})
-                continue
+                raise ValueError("case_id 不在当前 batch 中")
+            if case_id in seen_case_ids:
+                raise ValueError(f"重复 case_id={case_id}；网格研究或重跑结果必须显式版本化")
+            trusted = _trusted_identity(case_id, workspace, setup_manifest)
+            model = (trusted or {}).get("model_identity") or {}
+            setup = (trusted or {}).get("setup_identity") or {}
             evidence = load_solver_evidence(
                 path,
                 expected_item=case["check_item_id"],
-                expected_model_id=str((payload.get("model_identity") or {}).get("model_id") or ""),
+                expected_case_id=case_id,
+                expected_batch_id=str(batch.get("batch_id") or "") if trusted else "",
+                expected_model_id=str(model.get("model_id") or ""),
+                expected_digest=str(model.get("content_digest") or ""),
+                expected_input_digest=str(model.get("input_digest") or "") if trusted else "",
+                expected_setup_digest=str(setup.get("setup_digest") or ""),
+                expected_binding_digest=str(setup.get("binding_digest") or ""),
+                expected_capability_id=str(setup.get("capability_id") or ""),
+                required_outputs=case.get("required_output_units") or case["expected_units"],
                 require_converged=True,
+                require_native_evidence=bool(trusted),
             )
-            for name, unit in case["expected_units"].items():
-                if name in evidence.outputs:
-                    evidence.value(name, unit)
+            for name, unit in (case.get("required_output_units") or case["expected_units"]).items():
+                evidence.value(name, unit)
+            warnings = []
+            if trusted:
+                _verify_setup_identity(payload, evidence, trusted)
+            else:
+                if not evidence.model_id:
+                    raise ValueError("standalone 结果必须提供非空 model_identity.model_id")
+                warnings.append("standalone 结果未由受信任工作区验证，不能用于认证")
+            license_mode = _license_mode(evidence, allow_unverified_for_smoke)
+            evidence_source = str(getattr(evidence, "evidence_source", "cae_solver") or "cae_solver")
+            smoke = bool(
+                allow_unverified_for_smoke
+                or license_mode not in PRODUCTION_LICENSE_MODES
+                or evidence_source != "cae_solver"
+            )
+            if license_mode == "evaluation":
+                warnings.append("evaluation 许可证结果不能用于生产认证")
+            if smoke and license_mode != "evaluation":
+                warnings.append("smoke 结果不能用于生产认证")
+            material_status = str(setup.get("material_library_status") or "unknown")
+            if trusted and material_status != "released":
+                warnings.append("材料库不是 released 状态，不能用于生产认证")
+            eligible = bool(
+                trusted
+                and not smoke
+                and license_mode in PRODUCTION_LICENSE_MODES
+                and material_status == "released"
+            )
+            source = "cae_smoke" if smoke else "cae_solver"
+            solver = evidence.as_dict()
+            solver["source"] = source
+            seen_case_ids.add(case_id)
             records.append({
                 "case_id": case_id,
                 "check_item_id": case["check_item_id"],
                 "solver_case_id": evidence.case_id,
-                "license_mode": _license_mode(evidence, allow_unverified_for_smoke),
-                "solver": evidence.as_dict(),
+                "license_mode": license_mode,
+                "source": source,
+                "smoke": smoke,
+                "identity_verified": bool(trusted),
+                "material_library_status": material_status,
+                "certification_eligible": eligible,
+                "warnings": warnings,
+                "solver": solver,
                 "outputs": evidence.outputs,
                 "quality": payload.get("quality") or {},
             })
@@ -478,6 +945,8 @@ def ingest_results(
         "rejected": rejected,
         "accepted_count": len(records),
         "rejected_count": len(rejected),
+        "contains_smoke_results": any(record["smoke"] for record in records),
+        "certification_eligible": bool(records) and all(record["certification_eligible"] for record in records),
     }
 
 
@@ -516,6 +985,7 @@ def calibration_report(batch_path: str, records_path: str) -> dict:
             continue
         formula = load_formula(case["check_item_id"])
         outputs = record["outputs"]
+        decision_inputs = case.get("rule_formula_inputs") or case["formula_inputs"]
         for name, expected in case["expected_values"].items():
             if name not in outputs:
                 continue
@@ -551,13 +1021,14 @@ def calibration_report(batch_path: str, records_path: str) -> dict:
         else:
             insertion = _evidence_output_value(outputs, ("insertion_force_n",))
             withdrawal = _evidence_output_value(outputs, ("withdrawal_force_n",))
+            factors = (case.get("formula_scaling") or {}).get("output_factors") or {}
             if insertion is not None:
-                overrides["insertion_force_n"] = insertion
+                overrides["insertion_force_n"] = insertion * float(factors.get("insertion_force_n", 1.0))
             if withdrawal is not None:
-                overrides["withdrawal_force_n"] = withdrawal
+                overrides["withdrawal_force_n"] = withdrawal * float(factors.get("withdrawal_force_n", 1.0))
         if overrides:
-            solver_rules = formula.apply_solver_overrides(case["formula_inputs"], overrides)
-            formula_rules = formula.evaluate(case["formula_inputs"])
+            solver_rules = formula.apply_solver_overrides(decision_inputs, overrides)
+            formula_rules = formula.evaluate(decision_inputs)
             for f_item, s_item in zip(formula_rules.decisions, solver_rules.decisions):
                 decisions.append({
                     "case_id": case_id,
@@ -645,7 +1116,7 @@ def certification_report(
     min_samples_per_item: int = 20,
     max_median_relative_error_pct: float = 5.0,
     min_decision_agreement: float = 0.95,
-    max_mesh_sensitivity_pct: float = 3.0,
+    max_mesh_sensitivity_pct: float | None = None,
 ) -> dict:
     calibration = calibration_report(batch_path, records_path)
     with open(batch_path, "r", encoding="utf-8") as fh:
@@ -653,28 +1124,72 @@ def certification_report(
     with open(records_path, "r", encoding="utf-8") as fh:
         records = json.load(fh)
     items = list(batch.get("items") or SUPPORTED_ITEMS)
-    accepted = list(records.get("accepted") or [])
+    case_map = {case["case_id"]: case for case in batch.get("cases") or []}
+    raw_accepted = list(records.get("accepted") or [])
+    accepted = [
+        record for record in raw_accepted
+        if record.get("case_id") in case_map
+        and record.get("check_item_id") == case_map[record["case_id"]].get("check_item_id")
+    ]
     blockers = []
     checks = []
+    mesh_limits = _mesh_sensitivity_limits()
+    if records.get("batch_id") and records.get("batch_id") != batch.get("batch_id"):
+        blockers.append("records 文件属于其他 batch，不能合并认证")
+    if len(accepted) != len(raw_accepted):
+        blockers.append("结果集包含不属于当前 batch 或 check_item 不匹配的记录")
+    case_ids = [record.get("case_id") for record in accepted]
+    if len(set(case_ids)) != len(case_ids):
+        blockers.append("结果集包含重复 case_id，不能重复计入样本数")
+    if any(record.get("smoke") or record.get("source") in {"cae_smoke", "smoke_fixture", "smoke_solver"} for record in accepted) or records.get(
+        "contains_smoke_results"
+    ):
+        blockers.append("结果集包含 smoke/evaluation 记录，不能认证")
+    if any(not record.get("certification_eligible", False) for record in accepted):
+        blockers.append("结果集包含未通过受信任工作区验证或不具备生产资格的记录")
 
     for item in items:
         item_records = [record for record in accepted if record.get("check_item_id") == item]
+        mesh_limit = float(max_mesh_sensitivity_pct) if max_mesh_sensitivity_pct is not None else mesh_limits[item]
         if len(item_records) < min_samples_per_item:
             blockers.append(
                 f"{item} 认证样本只有 {len(item_records)} 条，至少需要 {min_samples_per_item} 条"
             )
-        if any(record.get("license_mode") not in AUTHORIZED_LICENSE_MODES for record in item_records):
-            blockers.append(f"{item} 含未声明正式授权的结果")
+        if any(record.get("license_mode") not in PRODUCTION_LICENSE_MODES for record in item_records):
+            blockers.append(f"{item} 含非生产授权的结果")
+        acceptance = _case_definitions()[item].get("acceptance") or {}
         for record in item_records:
-            mesh_change = (
-                (record.get("quality") or {}).get("mesh_sensitivity_relative_change_pct")
-            )
+            quality = record.get("quality") or {}
+            mesh_change = quality.get("mesh_sensitivity_relative_change_pct")
             if mesh_change is None:
                 blockers.append(f"{item} 的 {record['case_id']} 缺少网格敏感性证据")
-            elif float(mesh_change) > max_mesh_sensitivity_pct:
+            elif not isinstance(mesh_change, (int, float)) or isinstance(mesh_change, bool) or not math.isfinite(float(mesh_change)) or float(mesh_change) < 0:
+                blockers.append(f"{item} 的 {record['case_id']} 网格敏感性不是有效的非负有限数值")
+            elif float(mesh_change) > mesh_limit:
                 blockers.append(
                     f"{item} 的 {record['case_id']} 网格敏感性 "
-                    f"{float(mesh_change):.2f}% 超过 {max_mesh_sensitivity_pct:.2f}%"
+                    f"{float(mesh_change):.2f}% 超过 {mesh_limit:.2f}%"
+                )
+            quality_name = (
+                "energy_balance_relative_error" if item == "PERF-01" else "penetration_max_mm"
+            )
+            quality_value = quality.get(quality_name)
+            quality_limit = float(
+                0.02 if item == "PERF-01" else acceptance.get("penetration_limit_mm", 0.01)
+            )
+            if quality_value is None:
+                blockers.append(f"{item} 的 {record['case_id']} 缺少 {quality_name} 质量证据")
+            elif (
+                not isinstance(quality_value, (int, float))
+                or isinstance(quality_value, bool)
+                or not math.isfinite(float(quality_value))
+                or float(quality_value) < 0
+            ):
+                blockers.append(f"{item} 的 {record['case_id']} {quality_name} 不是有效的非负有限数值")
+            elif float(quality_value) > quality_limit:
+                blockers.append(
+                    f"{item} 的 {record['case_id']} {quality_name}={float(quality_value):.6g} "
+                    f"超过 {quality_limit:.6g}"
                 )
 
         quantity_names = (
@@ -703,6 +1218,7 @@ def certification_report(
             "sample_count": len(item_records),
             "minimum_sample_count": min_samples_per_item,
             "decision_agreement": agreement,
+            "max_mesh_sensitivity_pct": mesh_limit,
         })
 
     return {
@@ -717,7 +1233,13 @@ def certification_report(
             "max_median_relative_error_pct": max_median_relative_error_pct,
             "min_decision_agreement": min_decision_agreement,
             "max_mesh_sensitivity_pct": max_mesh_sensitivity_pct,
+            "max_mesh_sensitivity_pct_by_item": {
+                item: float(max_mesh_sensitivity_pct) if max_mesh_sensitivity_pct is not None else mesh_limits[item]
+                for item in items
+            },
             "authorized_license_required": True,
+            "trusted_identity_required": True,
+            "evaluation_and_smoke_eligible": False,
         },
         "calibration": calibration,
     }
@@ -782,6 +1304,8 @@ def main() -> None:
     ingest.add_argument("--results", required=True)
     ingest.add_argument("--out", required=True)
     ingest.add_argument("--allow-unverified-for-smoke", action="store_true")
+    ingest.add_argument("--workspace", help="受信任 materialize 工作区或 index.json")
+    ingest.add_argument("--setup-manifest", help="受信任 setup manifest JSON")
 
     report = sub.add_parser("report")
     report.add_argument("--batch", required=True)
@@ -795,7 +1319,7 @@ def main() -> None:
     certify.add_argument("--min-samples", type=int, default=20)
     certify.add_argument("--max-median-relative-error-pct", type=float, default=5.0)
     certify.add_argument("--min-decision-agreement", type=float, default=0.95)
-    certify.add_argument("--max-mesh-sensitivity-pct", type=float, default=3.0)
+    certify.add_argument("--max-mesh-sensitivity-pct", type=float)
 
     args = parser.parse_args()
     if args.command == "generate":
@@ -836,6 +1360,8 @@ def main() -> None:
             args.batch,
             args.results,
             allow_unverified_for_smoke=args.allow_unverified_for_smoke,
+            workspace=args.workspace,
+            setup_manifest=args.setup_manifest,
         )
         path = _json_write(args.out, payload)
         print(path)

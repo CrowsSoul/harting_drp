@@ -6,12 +6,13 @@
     {
       "case_id": "PERF-01-ET-STEADY-001",
       "check_item_id": "PERF-01",
-      "analysis_type": "steady_electrothermal",
+      "analysis_type": "thermal_with_joule",
+      "analysis_mode": "steady",
+      "physics_domain": "solid",
       "solver_targets": [
-        "Siemens Simcenter 3D Thermal Flow / NX Thermal",
-        "Siemens FloEFD"
+        "Siemens Simcenter 3D NX Thermal"
       ],
-      "purpose": "取得导体最高绝对温度、温升、电阻焦耳热和收敛证据，用于回填 PERF-01 规则认证样本。",
+      "purpose": "取得稳态固体导体最高绝对温度、温升、电阻、焦耳热和电压降，用于回填 PERF-01 规则认证样本。",
       "geometry": {
         "source": "NX part / assembly",
         "conductor_selector": "selected conductor body and cylindrical bottleneck face",
@@ -22,10 +23,10 @@
         "temperature_dependency": true
       },
       "boundary_conditions": {
-        "current_a": 16.0,
-        "ambient_temperature_c": 25.0,
-        "convection_h_w_m2k": 15.0,
-        "radiation_emissivity": 0.25,
+        "electrical_inlet": {"current_a": 16.0},
+        "electrical_outlet": {"voltage_v": 0.0},
+        "convection": {"ambient_temperature_c": 25.0, "h_w_m2k": 15.0},
+        "radiation": {"emissivity": 0.25},
         "contact_resistance_ohm": "from measured joint or explicit not-modeled flag"
       },
       "solver_outputs": {
@@ -38,11 +39,19 @@
           "convergence_status",
           "residual"
         ],
+        "units": {
+          "maximum_temperature_c": "degC",
+          "delta_t_c": "degC",
+          "total_resistance_ohm": "ohm",
+          "joule_power_w": "W",
+          "voltage_drop_v": "V"
+        },
         "probe_locations": ["minimum cross-section", "contact interfaces", "hottest node"]
       },
       "acceptance": {
         "convergence": "converged",
         "mesh_study": "maximum temperature change <= 2% between medium and fine mesh",
+        "mesh_sensitivity_max_pct": 2.0,
         "energy_balance_relative_error": "<= 0.02",
         "result_manifest_schema": "perf_solver_result.schema.json"
       }
@@ -50,23 +59,43 @@
     {
       "case_id": "PERF-02-CONTACT-STATIC-001",
       "check_item_id": "PERF-02",
-      "analysis_type": "structural_contact_static_nonlinear",
+      "analysis_type": "structural_contact_nonlinear_multistep",
+      "solution_card": "SOL 401",
+      "solution_type": "SOL 401 Multi-Step Nonlinear",
       "solver_targets": [
-        "Siemens Simcenter 3D Structures / NX Nastran SOL 401",
-        "Siemens Simcenter 3D Structures / NX Nastran SOL 402"
+        "Siemens Simcenter 3D Structures / NX Nastran SOL 401"
       ],
-      "purpose": "取得接触法向力、切向力、插拔方向反力、接触穿透和收敛证据，校准 PERF-02 降阶公式。",
+      "purpose": "用一个接触对取得法向力、插拔反力、接触穿透和收敛证据，并显式缩放到规则接触数。",
       "geometry": {
         "source": "NX assembly with mated terminal and spring contact",
+        "axis_convention": {"length": "X", "width": "Y", "thickness_and_normal_overlap": "Z"},
         "contact_definition": "surface-to-surface",
-        "required_evidence": ["source_face_ids", "target_face_ids", "spring_length_mm", "width_mm", "thickness_mm", "interference_mm"]
+        "modeled_contact_count": 1,
+        "required_evidence": ["source_face_ids", "target_face_ids", "spring_length_mm", "width_mm", "thickness_mm", "normal_overlap_mm", "insertion_stroke_mm"]
+      },
+      "material": {
+        "model": "linear elastic",
+        "required": ["density_kg_m3", "elastic_modulus_gpa", "poisson_ratio", "yield_strength_mpa"]
+      },
+      "mesh": {
+        "element_type": "tetrahedral or hexahedral structural solid",
+        "contact_refinement": true
+      },
+      "constraints": {
+        "fixed_root": "all translational and rotational degrees of freedom",
+        "driven_displacement": {
+          "axis": "X",
+          "direction": "-X for insertion and +X for withdrawal",
+          "target_role": "driven_face on CONTACT_TARGET",
+          "stroke_mm": "derived from spring length, not normal overlap"
+        }
       },
       "contact": {
         "method": "penalty",
         "friction_model": "coulomb",
         "friction_coefficient": 0.2,
-        "penalty_stiffness": "mesh-convergence calibrated",
-        "search_distance": ">= expected penetration and below adjacent-feature scale",
+        "penalty_stiffness": "explicit case value with mesh-convergence evidence",
+        "search_distance": "explicit case value below adjacent-feature scale",
         "large_displacement": true,
         "parameter_cards_to_review": ["BCONP", "BCTSET", "BFRIC", "BCTPARA"]
       },
@@ -74,16 +103,18 @@
         {
           "step": 1,
           "action": "establish_contact",
-          "control": "displacement until nominal interference is reached"
+          "control": "move target along -X from the initial non-penetrating position to first contact"
         },
         {
           "step": 2,
           "action": "insert",
+          "control": "continue target travel along -X to form normal_overlap_mm",
           "output": "insertion_force_n"
         },
         {
           "step": 3,
           "action": "withdraw",
+          "control": "reverse the complete insertion travel along +X",
           "output": "withdrawal_force_n"
         }
       ],
@@ -96,11 +127,19 @@
           "maximum_penetration_mm",
           "convergence_status",
           "residual"
-        ]
+        ],
+        "units": {
+          "insertion_force_n": "N",
+          "withdrawal_force_n": "N",
+          "maximum_normal_contact_force_n": "N",
+          "maximum_equivalent_stress_mpa": "MPa",
+          "maximum_penetration_mm": "mm"
+        }
       },
       "acceptance": {
         "convergence": "converged",
         "mesh_study": "force change <= 3% between medium and fine contact mesh",
+        "mesh_sensitivity_max_pct": 3.0,
         "penetration_limit_mm": 0.01,
         "result_manifest_schema": "perf_solver_result.schema.json"
       }

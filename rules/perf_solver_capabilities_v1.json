@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "PERF-SOLVER-CAPABILITIES-NX2606-v1",
+  "release_matching": "exact",
+  "status": "unverified",
+  "verified": false,
+  "provenance": {
+    "source": "nxdrp/journals/create_simcenter_case.py and rules/perf_simcenter_actions_v1.json",
+    "verification_status": "unverified",
+    "note": "Template, solver, analysis and solution labels are workflow inputs, not evidence of a successful solve. Native result keys have not been established."
+  },
+  "releases": {
+    "NX 2606.3002": {
+      "release": "NX 2606.3002",
+      "status": "unverified",
+      "verified": false,
+      "items": {
+        "PERF-01": {
+          "check_item_id": "PERF-01",
+          "mode": "thermal_with_joule",
+          "solution_mode": "thermal_with_joule",
+          "supported_modes": [
+            "thermal_with_joule"
+          ],
+          "status": "unverified",
+          "verified": false,
+          "template_names": {
+            "fem": "FemThermalFlowMetric.fem",
+            "sim": "SimThermalFlowMetric.sim"
+          },
+          "fem_template": "FemThermalFlowMetric.fem",
+          "sim_template": "SimThermalFlowMetric.sim",
+          "presentation": "Simcenter 3D Thermal",
+          "solver": "NX THERMAL",
+          "solver_name": "NX THERMAL",
+          "analysis_type": "thermal_with_joule",
+          "analysis_name": "thermal_with_joule",
+          "solution_name": "Steady State Solid Thermal",
+          "solution_type": "Steady State Solid Thermal",
+          "solution_title": "Steady State Solid Thermal",
+          "native_result_mapping": {
+            "maximum_temperature_c": null,
+            "delta_t_c": null,
+            "total_resistance_ohm": null,
+            "joule_power_w": null,
+            "voltage_drop_v": null,
+            "convergence_status": null,
+            "residual": null
+          },
+          "native_result_provenance": {
+            "maximum_temperature_c": "unverified: native FloEFD/NX result key not established",
+            "delta_t_c": "unverified: native FloEFD/NX result key not established",
+            "total_resistance_ohm": "unverified: native FloEFD/NX result key not established",
+            "joule_power_w": "unverified: native FloEFD/NX result key not established",
+            "voltage_drop_v": "unverified: native FloEFD/NX result key not established",
+            "convergence_status": "unverified: native convergence key not established",
+            "residual": "unverified: native residual key not established"
+          }
+        },
+        "PERF-02": {
+          "check_item_id": "PERF-02",
+          "mode": "SOL401",
+          "solution_mode": "nonlinear_contact",
+          "supported_modes": [
+            "SOL401"
+          ],
+          "status": "unverified",
+          "verified": false,
+          "template_names": {
+            "fem": "FemNxNastranMetric.fem",
+            "sim": "SimNxNastranMetric.sim"
+          },
+          "fem_template": "FemNxNastranMetric.fem",
+          "sim_template": "SimNxNastranMetric.sim",
+          "presentation": "Simcenter Nastran",
+          "solver": "NX NASTRAN",
+          "solver_name": "NX NASTRAN",
+          "analysis_type": "Structural",
+          "analysis_name": "Structural",
+          "solution_name": "SOL 401 Multi-Step Nonlinear",
+          "solution_type": "SOL 401 Multi-Step Nonlinear",
+          "solution_title": "SOL 401 Multi-Step Nonlinear",
+          "solution_card": "SOL 401",
+          "native_result_mapping": {
+            "insertion_force_n": null,
+            "withdrawal_force_n": null,
+            "maximum_normal_contact_force_n": null,
+            "maximum_penetration_mm": null,
+            "maximum_equivalent_stress_mpa": null,
+            "convergence_status": null,
+            "residual": null
+          },
+          "native_result_provenance": {
+            "insertion_force_n": "unverified: native Nastran result key not established",
+            "withdrawal_force_n": "unverified: native Nastran result key not established",
+            "maximum_normal_contact_force_n": "unverified: native Nastran result key not established",
+            "maximum_penetration_mm": "unverified: native Nastran result key not established",
+            "maximum_equivalent_stress_mpa": "unverified: native Nastran result key not established",
+            "convergence_status": "unverified: native convergence key not established",
+            "residual": "unverified: native residual key not established"
+          }
+        }
+      }
+    }
+  }
+}

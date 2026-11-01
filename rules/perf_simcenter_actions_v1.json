@@ -1,10 +1,14 @@
 {
   "schema_version": "1.0.0",
-  "source": "NX 2606 installed command catalog and Thermal Flow/Nastran templates",
+  "source": "NX 2606 installed command catalog and Thermal/Nastran templates",
   "items": {
     "PERF-01": {
-      "solver": "NX THERMAL / FLOW",
-      "analysis_type": "Coupled Thermal-Flow",
+      "solver": "NX THERMAL",
+      "analysis_type": "thermal_with_joule",
+      "solution_type": "Steady State Solid Thermal",
+      "analysis_mode": "steady",
+      "physics_domain": "solid",
+      "joule_heating": true,
       "selection_requirements": [
         "electrical inlet faces",
         "electrical outlet faces",
@@ -14,47 +18,71 @@
       "operations": [
         "assign temperature-dependent electrical resistivity",
         "assign thermal conductivity, density and specific heat",
-        "apply current or voltage boundary",
-        "enable Joule Heating",
-        "apply convection coefficient and ambient temperature",
-        "apply emissivity and radiation enclosure",
-        "request maximum temperature and Joule power"
+        "apply current to electrical_inlet",
+        "apply 0 V to electrical_outlet",
+        "enable Joule heating in the solid thermal solution",
+        "apply convection coefficient and ambient temperature to convection faces",
+        "apply emissivity and radiation enclosure to radiation faces",
+        "request all five numeric outputs with exact units"
       ],
+      "boundary_conditions": {
+        "electrical_inlet": "current_a",
+        "electrical_outlet": {"voltage_v": 0.0},
+        "convection": ["ambient_temperature_c", "convection_h_w_m2k"],
+        "radiation": ["radiation_emissivity"]
+      },
       "solver_controls": {
+        "analysis_mode": "steady",
+        "physics_domain": "solid",
+        "joule_heating": true,
         "maximum_radiative_temperature_c": 6000.0,
         "required_outputs": [
           "maximum_temperature_c",
           "delta_t_c",
           "total_resistance_ohm",
           "joule_power_w",
+          "voltage_drop_v",
           "convergence_status",
           "residual"
-        ]
+        ],
+        "required_output_units": {
+          "maximum_temperature_c": "degC",
+          "delta_t_c": "degC",
+          "total_resistance_ohm": "ohm",
+          "joule_power_w": "W",
+          "voltage_drop_v": "V"
+        }
       }
     },
     "PERF-02": {
       "solver": "NX NASTRAN",
       "analysis_type": "Structural",
-      "solution_type": "Nonlinear Statics",
+      "solution_type": "SOL 401 Multi-Step Nonlinear",
       "selection_requirements": [
         "spring fixed-root faces",
-        "spring insertion/withdrawal driven faces",
+        "target insertion/withdrawal driven faces",
         "contact source faces",
         "contact target faces"
       ],
       "operations": [
         "assign linear-elastic material",
-        "create tetrahedral or hexahedral structural mesh",
-        "define source/target surface contact",
+        "create tetrahedral or hexahedral structural mesh with contact refinement",
+        "fix the spring root in all degrees of freedom",
+        "define one source/target surface contact pair",
         "set Coulomb friction coefficient",
-        "configure penalty contact and search distance",
-        "fix root degrees of freedom",
-        "apply insertion displacement or force step",
-        "request contact force, reaction force, displacement and stress"
+        "configure explicit penalty stiffness and search distance",
+        "enable large displacement",
+        "start with the sloped target in a non-penetrating position",
+        "move the target along -X to establish contact and form normal_overlap_mm",
+        "reverse the target along +X for withdrawal; total insertion travel is insertion_stroke_mm",
+        "request contact force, reaction force, displacement, penetration and stress"
       ],
       "solver_controls": {
         "solution_card": "SOL 401",
+        "solution_type": "SOL 401 Multi-Step Nonlinear",
         "large_displacement": true,
+        "modeled_contact_count": 1,
+        "load_steps": ["establish_contact", "insert", "withdraw"],
         "required_outputs": [
           "insertion_force_n",
           "withdrawal_force_n",
@@ -63,7 +91,14 @@
           "maximum_equivalent_stress_mpa",
           "convergence_status",
           "residual"
-        ]
+        ],
+        "required_output_units": {
+          "insertion_force_n": "N",
+          "withdrawal_force_n": "N",
+          "maximum_normal_contact_force_n": "N",
+          "maximum_penetration_mm": "mm",
+          "maximum_equivalent_stress_mpa": "MPa"
+        }
       }
     }
   }

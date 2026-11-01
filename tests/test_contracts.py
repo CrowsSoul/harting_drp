@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nxdrp.contracts import BBox, Face, Finding, ModelBundle, Part, Rule, RuleBook
+from nxdrp.contracts.core import schema_documents
 from nxdrp.errors import ContractError
 
 
@@ -119,6 +120,23 @@ class TestRuleBook(unittest.TestCase):
             p = os.path.join(d, "r.json")
             book.save(p)
             self.assertEqual(RuleBook.load(p).name, "t")
+
+
+class TestSchemaExport(unittest.TestCase):
+    def test_perf_contracts_are_exported_from_static_documents(self):
+        documents = schema_documents()
+        expected = {
+            "perf_cae_batch.schema.json",
+            "perf_cae_binding.schema.json",
+            "perf_solver_result.schema.json",
+            "perf_cae_setup.schema.json",
+            "perf_cae_run.schema.json",
+            "perf_floefd_handoff.schema.json",
+        }
+        self.assertTrue(expected.issubset(documents))
+        for name in expected:
+            self.assertEqual(documents[name]["type"], "object")
+            self.assertTrue(documents[name]["$id"].endswith(name))
 
 
 if __name__ == "__main__":

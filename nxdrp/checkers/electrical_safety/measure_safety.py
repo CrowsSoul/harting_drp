@@ -51,6 +51,8 @@ def _row(item, index: int) -> dict:
         "p2": list(item.p2) if item.p2 else None,
         "path_points": [list(point) for point in item.path_points],
         "note": item.note,
+        "source_standard": item.extra.get("source_standard", ""),
+        "rule_inputs": item.extra.get("rule_inputs", {}),
     }
 
 
@@ -109,6 +111,8 @@ def measure(model_path: str, rules_path: str = "") -> dict:
         "sources": {
             "clearance": clearance_source,
             "creepage": creepage_source,
+            "creepage_default": creepage_source,
+            "note": "逐网络对实际来源见 measurements[].source_standard/rule_inputs",
         },
         "measurements": rows,
     }

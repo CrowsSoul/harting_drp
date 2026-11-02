@@ -173,7 +173,7 @@ else:
 - 变量只有 `params.x` 与 `meas.x` 两种写法；可用 `min/max/abs/round/if/table`；
 - `ExprUnitError`/`ExprTypeError` 是规则写错，不要捕获，让管线报 error；
 - 参考实现：`nxdrp/checkers/machining/dfm27_deep_hole.py`，
-  语法说明见 `nxdrp/expr/parser.py` 与 `docs/CHECKMATE_RULE_V2.md`。
+  语法说明见 `nxdrp/expr/parser.py` 与 `docs/branches/feat-nx-checkmate-cae-rule-replication/CHECKMATE_RULE_V2.md`。
 
 ### 写法 3：精确测距（间隙、干涉、爬电）
 

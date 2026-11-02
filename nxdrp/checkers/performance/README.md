@@ -5,11 +5,11 @@
 > **V2 已重构（2026-10-30）**：PERF-01/02 的计算与 PASS/FAIL 由
 > `rules/perf_formula_v2.json` 驱动；NX 风格比较式负责判定。回归树只保留为
 > 标定区间，不再决定报警。NX 取证与边界见
-> [`docs/NX_PERF_RULE_EVIDENCE.md`](../../../docs/NX_PERF_RULE_EVIDENCE.md)。
+> [`docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md`](../../../docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md)。
 > CAE 参数化、结果回填和认证状态机见
-> [`docs/CAE_PIPELINE.md`](../../../docs/CAE_PIPELINE.md)。
+> [`docs/branches/feat-nx-checkmate-cae-rule-replication/CAE_PIPELINE.md`](../../../docs/branches/feat-nx-checkmate-cae-rule-replication/CAE_PIPELINE.md)。
 > 正式报告模板见
-> [`docs/PERF_CAE_CERTIFICATION_TEMPLATE.md`](../../../docs/PERF_CAE_CERTIFICATION_TEMPLATE.md)。
+> [`docs/branches/feat-nx-checkmate-cae-rule-replication/PERF_CAE_CERTIFICATION_TEMPLATE.md`](../../../docs/branches/feat-nx-checkmate-cae-rule-replication/PERF_CAE_CERTIFICATION_TEMPLATE.md)。
 
 本文件同时是模块说明和本次开发记录。任务原文在 `性能预测工作要求.md`。
 
@@ -283,4 +283,4 @@ PERF-02 插拔力：V2 已改为规则驱动的悬臂梁加摩擦公式，几何
 本机已完成 NX Open、Simcenter Nastran SOL 101 和 Thermal Flow 启动冒烟，
 但没有生成 PERF-01/PERF-02 认证样本。当前 Nastran 许可来源为非正式授权，
 冒烟结果不进入 `cae_solver` 认证数据。公式仍属于筛查级，不是 CAE 认证结果。
-实际求解工况见 `rules/perf_cae_cases.json`，证据边界见 `docs/NX_PERF_RULE_EVIDENCE.md`。
+实际求解工况见 `rules/perf_cae_cases.json`，证据边界见 `docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md`。

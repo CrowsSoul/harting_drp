@@ -2,6 +2,7 @@
 
 > 分支：`feat/nx-checkmate-cae-rule-replication`（V2 主线 C 的 DFM 部分）
 > 最近更新：2026-10-31（W1~W5 完成：**38/38 项 DFM 全部公式化**）
+> 分支整体完成情况（含 PERF）：见 [`COMPLETION_REPORT.md`](COMPLETION_REPORT.md)。
 
 ## 一、任务与范围
 
@@ -36,8 +37,8 @@ PERF-01/02 公式驱动重构、Simcenter/FloEFD 离线链路、结果契约与�
 | 3 | CheckContext.evaluate 集成 + 舍入收口 | ✅ | `nxdrp/checkers/base.py`、`_machining_common.py` |
 | 4 | DFM-27/28/33 双路径迁移 | ✅ | 三个 checker；`rules/dfm_default.json` v0.5；`tests/test_expr_machining.py`（8 例） |
 | 5 | 取证工具（.dfa 解析、Check-Mate 黑盒、双跑对账） | ✅ | `tools/checkmate/`、`nxdrp/journals/checkmate_checker.py`；`tests/test_checkmate_tools.py` |
-| 6 | 证据落库（出处/参数/样本/置信度） | ✅ | `docs/checkmate_evidence/`（README + smoke + 3 份规则证据） |
-| 7 | Check-Mate 许可冒烟 | ✅ | `docs/checkmate_evidence/smoke.md` |
+| 6 | 证据落库（出处/参数/样本/置信度） | ✅ | `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/`（README + smoke + 3 份规则证据） |
+| 7 | Check-Mate 许可冒烟 | ✅ | `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/smoke.md` |
 | 8 | gen_rules 增量语义（不覆盖人工调参） | ✅ | `tools/gen_rules.py`；重跑后规则库语义零变化 |
 | 9 | 回归：13 个 mock 模型新旧双跑 | ✅ | 零差异（`tools/checkmate/reconcile_verdicts.py`） |
 | 10 | 全量单测 | ✅（1 项环境性失败） | 377 项：376 通过 / 1 失败（见第四节） |
@@ -48,7 +49,7 @@ PERF-01/02 公式驱动重构、Simcenter/FloEFD 离线链路、结果契约与�
 |---|---|---|---|
 | 11 | 引擎扩展 `nearest(list,x)`（到标准系列最近元） | ✅ | `nxdrp/expr/`；引擎单测 50 例 |
 | 12 | DFM-29/30/31/32/34/35/36/37/38 双路径迁移 | ✅ | 9 个 checker；`rules/dfm_default.json` v0.6 |
-| 13 | 9 份 Check-Mate 取证文档（公式/默认值/差异清单） | ✅ | `docs/checkmate_evidence/DFM-29~38.md` |
+| 13 | 9 份 Check-Mate 取证文档（公式/默认值/差异清单） | ✅ | `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-29~38.md` |
 | 14 | 新增表达式语义单测（布尔型 case、nearest 参数覆盖、单位） | ✅ | `tests/test_expr_machining.py`（14 例） |
 | 15 | 双跑对账（12 项全量） | ✅ | 13 个模型零差异；对账工具改为数值容差匹配（消除二次舍入假差异） |
 | 16 | 全量单测 | ✅（1 项环境性失败） | 386 项：385 通过 / 1 失败（同第四节） |
@@ -59,7 +60,7 @@ PERF-01/02 公式驱动重构、Simcenter/FloEFD 离线链路、结果契约与�
 |---|---|---|---|
 | 17 | 引擎扩展：case 可省略 measured（布尔型判定） | ✅ | `nxdrp/expr/cases.py`；引擎单测 51 例 |
 | 18 | DFM-08~18 双路径迁移（含 `table()` 材料查表、`if()` 选倍率） | ✅ | 11 个 checker；`rules/dfm_default.json` v0.7 |
-| 19 | 11 份取证文档（Check-Mate 有/无对应项的差异清单） | ✅ | `docs/checkmate_evidence/DFM-08~18.md` |
+| 19 | 11 份取证文档（Check-Mate 有/无对应项的差异清单） | ✅ | `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-08~18.md` |
 | 20 | 注塑 v2 单测（新旧等价 33 个模型 + 语义断言） | ✅ | `tests/test_expr_injection.py`（8 例） |
 | 21 | 双跑对账（注塑 11 项） | ✅ | 13 个 mock 模型零差异；DFM-11 单位修正单独记录 |
 | 22 | 全量单测 | ✅（1 项环境性失败） | 395 项：394 通过 / 1 失败（同第四节） |
@@ -69,7 +70,7 @@ PERF-01/02 公式驱动重构、Simcenter/FloEFD 离线链路、结果契约与�
 | # | 工作项 | 状态 | 证据 |
 |---|---|---|---|
 | 23 | DFM-19~26 双路径迁移（系数×料厚、3t+R 公式） | ✅ | 8 个 checker；`rules/dfm_default.json` v0.8 |
-| 24 | 8 份取证文档（含与 `dfms_PunchedHole*` 的阈值对照） | ✅ | `docs/checkmate_evidence/DFM-19~26.md` |
+| 24 | 8 份取证文档（含与 `dfms_PunchedHole*` 的阈值对照） | ✅ | `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-19~26.md` |
 | 25 | 钣金 v2 单测（新旧等价 14 个模型 + 语义断言） | ✅ | `tests/test_expr_sheet_metal.py`（6 例） |
 | 26 | 双跑对账（钣金 8 项） | ✅ | bent_sheet + 13 个 mock 模型零差异 |
 | 27 | 全量单测 | ✅（1 项环境性失败） | 401 项：400 通过 / 1 失败（同第四节） |
@@ -79,7 +80,7 @@ PERF-01/02 公式驱动重构、Simcenter/FloEFD 离线链路、结果契约与�
 | # | 工作项 | 状态 | 证据 |
 |---|---|---|---|
 | 28 | DFM-01~07 双路径迁移（体积/间隙/对齐/紧固件三类） | ✅ | 7 个 checker；`rules/dfm_default.json` v0.9 |
-| 29 | 7 份取证文档（含 `dfms_Fastener*` / `HoleAlignment` 默认值对照） | ✅ | `docs/checkmate_evidence/DFM-01~07.md` |
+| 29 | 7 份取证文档（含 `dfms_Fastener*` / `HoleAlignment` 默认值对照） | ✅ | `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-01~07.md` |
 | 30 | 装配 v2 单测（22 个合成模型 + 13 个 mock 新旧等价、精确/粗筛 severity） | ✅ | `tests/test_expr_assembly.py`（6 例） |
 | 31 | 双跑对账（装配 7 项） | ✅ | 零差异 |
 | 32 | 全量单测 | ✅（1 项环境性失败） | 407 项：406 通过 / 1 失败（同第四节） |
@@ -92,7 +93,7 @@ PERF-01/02 公式驱动重构、Simcenter/FloEFD 离线链路、结果契约与�
 - 本机 NX `Designcenter2606` 的 DFM Advisor 检查器可直接经 `CheckerExecutor` 执行，
   参数可按名覆盖（类型敏感：float 必须传 float）；
 - 判定结果落在 PLMXML 日志里，`tools/checkmate/run_checkmate.py` 已能解析成结构化样本；
-- 详见 `docs/checkmate_evidence/smoke.md`。
+- 详见 `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/smoke.md`。
 
 ### 2. 机加工 12 项取证结论
 

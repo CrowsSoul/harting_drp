@@ -14,7 +14,7 @@
           "NX Nastran thermal sample: temperature-dependent radiation boundary"
         ],
         "evidence_note": "NX formula/comparison semantics reproduced; contact resistance remains a local calibrated term and is not claimed as NX output.",
-        "reference_path": "docs/NX_PERF_RULE_EVIDENCE.md",
+        "reference_path": "docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md",
         "evidence_machine": "rules/nx_rule_evidence_v1.json#/rule_mapping/PERF-01",
         "confidence": "formula_and_local_verification"
       },
@@ -146,7 +146,7 @@
           "Coulomb friction cone and lead-angle force equilibrium"
         ],
         "evidence_note": "The efficient checker uses the reduced-order formula. A nonlinear NX solver result is required before using it outside the documented small-deflection scope.",
-        "reference_path": "docs/NX_PERF_RULE_EVIDENCE.md",
+        "reference_path": "docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md",
         "evidence_machine": "rules/nx_rule_evidence_v1.json#/rule_mapping/PERF-02",
         "confidence": "formula_and_local_verification"
       },

@@ -34,7 +34,7 @@
       },
       "unit": "mm^3",
       "rounding": 6,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_ComponentInterference.html（存在干涉即失败，无体积阈值）；证据 docs/checkmate_evidence\\DFM-01.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_ComponentInterference.html（存在干涉即失败，无体积阈值）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-01.md"
     },
     {
       "rule_id": "R-DFM-02",
@@ -70,7 +70,7 @@
       },
       "unit": "mm",
       "rounding": 6,
-      "reference": "Check-Mate 无直接对应（DFA/装配间隙分析 mqc_check_assembly_clearance_analysis.dfa 可作参考）；公式为项目基线；证据 docs/checkmate_evidence\\DFM-02.md"
+      "reference": "Check-Mate 无直接对应（DFA/装配间隙分析 mqc_check_assembly_clearance_analysis.dfa 可作参考）；公式为项目基线；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-02.md"
     },
     {
       "rule_id": "R-DFM-03",
@@ -102,7 +102,7 @@
       },
       "unit": "mm",
       "rounding": 6,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_HoleAlignment.html（search_dist 1 mm、max_distance 0 mm、max_angle 0°）；证据 docs/checkmate_evidence\\DFM-03.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_HoleAlignment.html（search_dist 1 mm、max_distance 0 mm、max_angle 0°）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-03.md"
     },
     {
       "rule_id": "R-DFM-04",
@@ -133,7 +133,7 @@
       },
       "unit": "mm",
       "rounding": 6,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotToHoleAlignment.html（ang_max 0.1°、dist_max 0.01 mm）；证据 docs/checkmate_evidence\\DFM-04.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotToHoleAlignment.html（ang_max 0.1°、dist_max 0.01 mm）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-04.md"
     },
     {
       "rule_id": "R-DFM-05",
@@ -174,7 +174,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerAccess.html（min_head_clearance 2 mm、min_insertion_clearance 2 mm）；证据 docs/checkmate_evidence\\DFM-05.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerAccess.html（min_head_clearance 2 mm、min_insertion_clearance 2 mm）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-05.md"
     },
     {
       "rule_id": "R-DFM-06",
@@ -209,7 +209,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerClearance.html（min_tip_clearance 1 mm、min_through_hole_clearance 0.1 mm）；证据 docs/checkmate_evidence\\DFM-06.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerClearance.html（min_tip_clearance 1 mm、min_through_hole_clearance 0.1 mm）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-06.md"
     },
     {
       "rule_id": "R-DFM-07",
@@ -238,7 +238,7 @@
       },
       "unit": "ratio",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerEngagement.html（min_eng_len_diam_ratio 默认 1.5）；证据 docs/checkmate_evidence\\DFM-07.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerEngagement.html（min_eng_len_diam_ratio 默认 1.5）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-07.md"
     },
     {
       "rule_id": "R-DFM-08",
@@ -290,7 +290,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-08.md（材料最小壁厚表 × 临界倍率的项目基线）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-08.md（材料最小壁厚表 × 临界倍率的项目基线）"
     },
     {
       "rule_id": "R-DFM-09",
@@ -325,7 +325,7 @@
       },
       "unit": "%",
       "rounding": 2,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-09.md（均匀壁厚面积占比的项目基线）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-09.md（均匀壁厚面积占比的项目基线）"
     },
     {
       "rule_id": "R-DFM-10",
@@ -357,7 +357,7 @@
       },
       "unit": "%",
       "rounding": 2,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-10.md（相邻壁厚变化率的项目基线）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-10.md（相邻壁厚变化率的项目基线）"
     },
     {
       "rule_id": "R-DFM-11",
@@ -399,7 +399,7 @@
       },
       "unit": "比值",
       "rounding": 2,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-11.md（加强筋基础设计的项目基线）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-11.md（加强筋基础设计的项目基线）"
     },
     {
       "rule_id": "R-DFM-12",
@@ -441,7 +441,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-12.md（模具钢净厚的项目基线）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-12.md（模具钢净厚的项目基线）"
     },
     {
       "rule_id": "R-DFM-13",
@@ -475,7 +475,7 @@
       },
       "unit": "deg",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumDraftAngle.html（cavity 2°/core 1°）与 TOOLING_BASE\\dfa\\mw_check_draft_angle.dfa（draft_angle 3.0、cross_angle 5.0）；证据 docs/checkmate_evidence\\DFM-13.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumDraftAngle.html（cavity 2°/core 1°）与 TOOLING_BASE\\dfa\\mw_check_draft_angle.dfa（draft_angle 3.0、cross_angle 5.0）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-13.md"
     },
     {
       "rule_id": "R-DFM-14",
@@ -508,7 +508,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_UndercutDetection.html 与 TOOLING_BASE\\dfa\\mw_check_undercut_area.dfa；证据 docs/checkmate_evidence\\DFM-14.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_UndercutDetection.html 与 TOOLING_BASE\\dfa\\mw_check_undercut_area.dfa；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-14.md"
     },
     {
       "rule_id": "R-DFM-15",
@@ -557,7 +557,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-15.md（凸台壁厚/顶厚/根部圆角/侧壁距的项目基线）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-15.md（凸台壁厚/顶厚/根部圆角/侧壁距的项目基线）"
     },
     {
       "rule_id": "R-DFM-16",
@@ -596,7 +596,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardCornerRadius.html（标准半径系列，口径参考）；内/外圆角倍率为项目基线；证据 docs/checkmate_evidence\\DFM-16.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardCornerRadius.html（标准半径系列，口径参考）；内/外圆角倍率为项目基线；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-16.md"
     },
     {
       "rule_id": "R-DFM-17",
@@ -624,7 +624,7 @@
       },
       "unit": "方向",
       "rounding": 0,
-      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/checkmate_evidence/DFM-17.md（抽芯方向聚类统计的项目基线；方向聚类见 dfms_UndercutDetection 的 draft_dirs 概念）"
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-17.md（抽芯方向聚类统计的项目基线；方向聚类见 dfms_UndercutDetection 的 draft_dirs 概念）"
     },
     {
       "rule_id": "R-DFM-18",
@@ -654,7 +654,7 @@
       },
       "unit": "deg",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\pdq\\mqc_pdq_sharp_edge_angle.dfa（angle_tolerance 默认 0.5°）；证据 docs/checkmate_evidence\\DFM-18.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\pdq\\mqc_pdq_sharp_edge_angle.dfa（angle_tolerance 默认 0.5°）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-18.md"
     },
     {
       "rule_id": "R-DFM-19",
@@ -683,7 +683,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_bending_break_radius.dfa（standard_multiple_factor 0.1、deviation 1.1，口径差异见证据）；证据 docs/checkmate_evidence\\DFM-19.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_bending_break_radius.dfa（standard_multiple_factor 0.1、deviation 1.1，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-19.md"
     },
     {
       "rule_id": "R-DFM-20",
@@ -712,7 +712,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToPartEdge.html（dist_thickness_ratio_min 默认 3）；证据 docs/checkmate_evidence\\DFM-20.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToPartEdge.html（dist_thickness_ratio_min 默认 3）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-20.md"
     },
     {
       "rule_id": "R-DFM-21",
@@ -741,7 +741,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleSpacing.html（dist_thickness_ratio_min 默认 3）；证据 docs/checkmate_evidence\\DFM-21.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleSpacing.html（dist_thickness_ratio_min 默认 3）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-21.md"
     },
     {
       "rule_id": "R-DFM-22",
@@ -770,7 +770,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html（diam_thickness_ratio_min 默认 1）；证据 docs/checkmate_evidence\\DFM-22.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html（diam_thickness_ratio_min 默认 1）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-22.md"
     },
     {
       "rule_id": "R-DFM-23",
@@ -799,7 +799,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html 与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_size.dfa（截口最小尺寸）；证据 docs/checkmate_evidence\\DFM-23.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html 与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_size.dfa（截口最小尺寸）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-23.md"
     },
     {
       "rule_id": "R-DFM-24",
@@ -829,7 +829,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToBend.html（dist_thickness_ratio_min 默认 3）与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_bending_distance.dfa；证据 docs/checkmate_evidence\\DFM-24.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToBend.html（dist_thickness_ratio_min 默认 3）与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_bending_distance.dfa；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-24.md"
     },
     {
       "rule_id": "R-DFM-25",
@@ -859,7 +859,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumFlangeHeight.html（height_min 3 mm、height_thickness_ratio_min 3）；证据 docs/checkmate_evidence\\DFM-25.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumFlangeHeight.html（height_min 3 mm、height_thickness_ratio_min 3）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-25.md"
     },
     {
       "rule_id": "R-DFM-26",
@@ -895,7 +895,7 @@
       },
       "unit": "mm",
       "rounding": 3,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EmbossmentMaximumDepth.html（height_thickness_ratio_max 默认 5，口径差异见证据）；证据 docs/checkmate_evidence\\DFM-26.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EmbossmentMaximumDepth.html（height_thickness_ratio_max 默认 5，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-26.md"
     },
     {
       "rule_id": "R-DFM-27",
@@ -934,7 +934,7 @@
       },
       "unit": "比值",
       "rounding": 2,
-      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepHoles.html（L/D > ld_ratio_max，默认 5）与 NXCheckers.json#dfms_DeepHoles；取证与差异见 docs/checkmate_evidence/DFM-27.md"
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepHoles.html（L/D > ld_ratio_max，默认 5）与 NXCheckers.json#dfms_DeepHoles；取证与差异见 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-27.md"
     },
     {
       "rule_id": "R-DFM-28",
@@ -963,7 +963,7 @@
       },
       "unit": "比值",
       "rounding": 2,
-      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotsDeepAndNarrow.html（D/W > depth_width_ratio_max，默认 4）与 NXCheckers.json#dfms_SlotsDeepAndNarrow；取证与差异见 docs/checkmate_evidence/DFM-28.md"
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotsDeepAndNarrow.html（D/W > depth_width_ratio_max，默认 4）与 NXCheckers.json#dfms_SlotsDeepAndNarrow；取证与差异见 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-28.md"
     },
     {
       "rule_id": "R-DFM-29",
@@ -988,7 +988,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FlatBottomHoles.html（盲孔平底即失败）；证据 docs/checkmate_evidence/DFM-29.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FlatBottomHoles.html（盲孔平底即失败）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-29.md"
     },
     {
       "rule_id": "R-DFM-30",
@@ -1016,7 +1016,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconvenientToolAccess.html（按铣削方向可见性判可达）；证据 docs/checkmate_evidence/DFM-30.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconvenientToolAccess.html（按铣削方向可见性判可达）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-30.md"
     },
     {
       "rule_id": "R-DFM-31",
@@ -1071,7 +1071,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardHoleSizes.html（std_diameters 默认 0.75/1.6/2.5/3.3/4.2）；证据 docs/checkmate_evidence/DFM-31.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardHoleSizes.html（std_diameters 默认 0.75/1.6/2.5/3.3/4.2）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-31.md"
     },
     {
       "rule_id": "R-DFM-32",
@@ -1101,7 +1101,7 @@
       },
       "unit": "种",
       "rounding": 0,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconsistentBottomRadius.html（底部圆角半径不一致即失败）；证据 docs/checkmate_evidence/DFM-32.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconsistentBottomRadius.html（底部圆角半径不一致即失败）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-32.md"
     },
     {
       "rule_id": "R-DFM-33",
@@ -1152,7 +1152,7 @@
           "note": "装配贴合面等允许保留锐边的零件（模型 meta.sharp_edge_exempt_parts）"
         }
       ],
-      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_TopFillets.html 与 dfms_StandardCornerRadius.html（口径差异：NX 判'入口面带圆角'为失败，本项目判'缺圆角/圆角过小'）；差异清单见 docs/checkmate_evidence/DFM-33.md"
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_TopFillets.html 与 dfms_StandardCornerRadius.html（口径差异：NX 判'入口面带圆角'为失败，本项目判'缺圆角/圆角过小'）；差异清单见 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-33.md"
     },
     {
       "rule_id": "R-DFM-34",
@@ -1189,7 +1189,7 @@
           }
         ]
       },
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InternalChamfers.html（型腔底部内倒角即失败，口径差异见证据）；证据 docs/checkmate_evidence/DFM-34.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InternalChamfers.html（型腔底部内倒角即失败，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-34.md"
     },
     {
       "rule_id": "R-DFM-35",
@@ -1217,7 +1217,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepRadiusCorners.html（L/R > lr_ratio_max 默认 10，口径差异见证据）；证据 docs/checkmate_evidence/DFM-35.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepRadiusCorners.html（L/R > lr_ratio_max 默认 10，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-35.md"
     },
     {
       "rule_id": "R-DFM-36",
@@ -1246,7 +1246,7 @@
       },
       "unit": "deg",
       "rounding": 1,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_AngularMillingFaces.html（铣削轴与侧壁夹角，口径差异见证据）；证据 docs/checkmate_evidence/DFM-36.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_AngularMillingFaces.html（铣削轴与侧壁夹角，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-36.md"
     },
     {
       "rule_id": "R-DFM-37",
@@ -1274,7 +1274,7 @@
       },
       "unit": "mm",
       "rounding": 2,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_NarrowPassages.html（W < min_width_validation 默认 2.0）；证据 docs/checkmate_evidence/DFM-37.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_NarrowPassages.html（W < min_width_validation 默认 2.0）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-37.md"
     },
     {
       "rule_id": "R-DFM-38",
@@ -1302,7 +1302,7 @@
       },
       "unit": "deg",
       "rounding": 1,
-      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EntryExitSurfaceForHoles.html（入/出刀边非圆弧即失败，口径差异见证据）；证据 docs/checkmate_evidence/DFM-38.md"
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EntryExitSurfaceForHoles.html（入/出刀边非圆弧即失败，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-38.md"
     },
     {
       "rule_id": "R-SAF-01",
@@ -1428,7 +1428,7 @@
           "note": "由 PERF-01 检查器在条件不满足时跳过，不猜结果"
         }
       ],
-      "reference": "rules/perf_formula_v2.json#PERF-01；docs/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json",
+      "reference": "rules/perf_formula_v2.json#PERF-01；docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json",
       "formula_ref": "PERF-01",
       "source_standard": "NX Check-Mate 条件比较 + NX Thermal Flow/TMG 稳态热网络；接触电阻为本地标定项",
       "severity": "P2",
@@ -1490,7 +1490,7 @@
           "note": "插入力公式分母非正，属物理边界，由检查器跳过"
         }
       ],
-      "reference": "rules/perf_formula_v2.json#PERF-02；docs/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json；rules/perf_cae_cases.json#PERF-02",
+      "reference": "rules/perf_formula_v2.json#PERF-02；docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json；rules/perf_cae_cases.json#PERF-02",
       "formula_ref": "PERF-02",
       "source_standard": "NX Nastran 摩擦/罚函数接触工况 + 欧拉-伯努利悬臂梁与库仑摩擦降阶公式",
       "severity": "P2",

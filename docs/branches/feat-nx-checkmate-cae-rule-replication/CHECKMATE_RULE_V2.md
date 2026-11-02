@@ -122,7 +122,7 @@ def check(self, ctx):
 ## 六、新增/迁移一条规则的步骤
 
 1. 在 `rules/dfm_default.json` 对应 `Rule` 上加 `expression` / `unit` / `rounding` / `reference`
-   （`reference` 写 Check-Mate 出处与证据文档路径，见 `docs/checkmate_evidence/`）；
+   （`reference` 写 Check-Mate 出处与证据文档路径，见 `docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/`）；
 2. 把 checker 里的比较层替换为 `ctx.evaluate(...)`，几何测量保留，旧路径移入 `else`；
 3. 在 `tests/test_expr_machining.py` 模式上加：边界/单位/舍入/severity 升级/豁免用例，
    以及"新旧双路径同模型同结果"断言；
@@ -135,4 +135,5 @@ def check(self, ctx):
 - 集成：`nxdrp/checkers/base.py`（`ctx.evaluate`）、`nxdrp/checkers/machining/_machining_common.py`（舍入）
 - 迁移实现：`nxdrp/checkers/machining/dfm27~38*.py`（12 项）与 `nxdrp/checkers/examples/dfm31_*.py`、`dfm32_*.py`
 - 测试：`tests/test_expr_engine.py`、`tests/test_expr_rule_v2.py`、`tests/test_expr_machining.py`
-- 取证：`docs/checkmate_evidence/`、`tools/checkmate/`
+- 取证：`docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/`、`tools/checkmate/`
+- 分支整体完成情况（DFM + PERF）：`docs/branches/feat-nx-checkmate-cae-rule-replication/COMPLETION_REPORT.md`

@@ -1422,8 +1422,10 @@
       "rounding": 2,
       "exceptions": [
         {
-          "when": "missing material, conductor face or solver inputs",
-          "action": "skip"
+          "when": "缺少材料、导体圆柱面或求解输入",
+          "skip": true,
+          "enforced_by": "checker",
+          "note": "由 PERF-01 检查器在条件不满足时跳过，不猜结果"
         }
       ],
       "reference": "rules/perf_formula_v2.json#PERF-01；docs/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json",
@@ -1476,12 +1478,16 @@
       "rounding": 2,
       "exceptions": [
         {
-          "when": "contact spring metadata is missing or invalid",
-          "action": "skip"
+          "when": "接触簧片元数据缺失或无效",
+          "skip": true,
+          "enforced_by": "checker",
+          "note": "由 PERF-02 检查器跳过"
         },
         {
-          "when": "1 - friction_coeff * tan(lead_angle) <= 0",
-          "action": "skip"
+          "when": "摩擦锥自锁：1 - friction_coeff * tan(lead_angle) <= 0",
+          "skip": true,
+          "enforced_by": "checker",
+          "note": "插入力公式分母非正，属物理边界，由检查器跳过"
         }
       ],
       "reference": "rules/perf_formula_v2.json#PERF-02；docs/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json；rules/perf_cae_cases.json#PERF-02",

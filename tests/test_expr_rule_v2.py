@@ -81,6 +81,38 @@ class RuleBookValidateTests(unittest.TestCase):
         book = RuleBook.load(RULES_PATH)
         book.validate()  # 现有规则库必须继续通过
 
+    def test_legacy_action_key_rejected(self):
+        book = RuleBook(rules=[Rule(
+            rule_id="R-1", check_item_id="C-1",
+            exceptions=[{"when": "缺数据", "action": "skip"}],
+        )])
+        with self.assertRaises(ContractError) as caught:
+            book.validate()
+        self.assertIn("action", str(caught.exception))
+
+    def test_checker_enforced_exception_requires_marker(self):
+        legacy_style = RuleBook(rules=[Rule(
+            rule_id="R-1", check_item_id="C-1",
+            exceptions=[{"when": "缺数据", "skip": True}],
+        )])
+        with self.assertRaises(ContractError):
+            legacy_style.validate()          # 无 expression 时必须标 enforced_by=checker
+        ok = RuleBook(rules=[Rule(
+            rule_id="R-1", check_item_id="C-1",
+            exceptions=[{"when": "缺数据", "skip": True, "enforced_by": "checker"}],
+        )])
+        ok.validate()
+
+    def test_repo_exceptions_use_canonical_contract(self):
+        book = RuleBook.load(RULES_PATH)
+        for rule in book.rules:
+            for entry in rule.exceptions:
+                self.assertNotIn("action", entry, rule.check_item_id)
+                if "skip" in entry:
+                    self.assertIsInstance(entry["skip"], bool, rule.check_item_id)
+                if entry.get("skip") and not rule.has_expression:
+                    self.assertEqual(entry.get("enforced_by"), "checker", rule.check_item_id)
+
 
 if __name__ == "__main__":
     unittest.main()

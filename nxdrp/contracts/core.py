@@ -479,6 +479,24 @@ class RuleBook:
         for r in self.rules:
             if r.severity not in SEVERITIES:
                 problems.append(f"{r.check_item_id}: severity={r.severity!r} 非法")
+            for index, entry in enumerate(r.exceptions):
+                # 统一契约：跳过后置条件用 skip=True；无 expression 的规则由 checker 执行，
+                # 必须标 enforced_by="checker"（PERF 等规则库即此形态）
+                if not isinstance(entry, dict):
+                    problems.append(f"{r.check_item_id}: exceptions[{index}] 必须是对象")
+                    continue
+                if "action" in entry:
+                    problems.append(
+                        f"{r.check_item_id}: exceptions[{index}] 使用了旧键 action，"
+                        "统一为 skip / severity_override"
+                    )
+                if "skip" in entry and not isinstance(entry["skip"], bool):
+                    problems.append(f"{r.check_item_id}: exceptions[{index}].skip 必须是布尔值")
+                if entry.get("skip") and not r.has_expression and entry.get("enforced_by") != "checker":
+                    problems.append(
+                        f"{r.check_item_id}: 无 expression 的规则，跳过后置条件需标 "
+                        "enforced_by=\"checker\""
+                    )
             if r.expression:
                 # 延迟导入：契约层不依赖引擎的加载顺序，坏规则在加载时被挡在门外
                 from ..expr import validate_expression
@@ -701,11 +719,6 @@ def schema_documents() -> dict[str, dict]:
                             "process_type": {"type": "string"},
                             "enabled": {"type": "boolean"},
                             "params": {"type": "object"},
-                            "expression": {"type": "string"},
-                            "unit": {"type": "string"},
-                            "rounding": {"type": "object"},
-                            "exceptions": {"type": "array", "items": {"type": "object"}},
-                            "reference": {"type": "object"},
                             "formula_ref": {"type": "string"},
                             "formula": {"type": "object"},
                             "source_standard": {"type": "string"},

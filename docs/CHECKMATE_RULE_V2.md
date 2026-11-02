@@ -53,6 +53,11 @@ V1 的判定 = 阈值参数 + checker 里写死的公式/比较/severity 联动�
   **阈值本身可以是公式**（如 DFM-19 的 `params.min_bend_radius_ratio * meas.thickness`）。
 - `exceptions` 在 case 命中后按序求值：`skip: true` 抑制该条，`severity_override` 降级；
   豁免依据缺数据时**不豁免**（宁可报）。
+- **统一的 exceptions 契约**（`RuleBook.validate()` 强制检查）：
+  - 有 `expression` 的规则：`when` 必须是可解析的 DSL 布尔式，配 `skip: true` 或 `severity_override`；
+  - 无 `expression` 的规则（如 PERF 公式驱动规则）：`when` 可写文字前置条件，
+    但必须配 `skip: true` + `enforced_by: "checker"`，表示跳过逻辑由 checker 执行；
+  - 旧键 `action` 已废弃，加载规则库时会报错。
 - `rounding` 只作用于回填 Finding 的 measured/threshold，**不参与判定**。
 
 ## 四、DSL 语法

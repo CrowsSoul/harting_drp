@@ -12,6 +12,7 @@ from .engine import (
     ThresholdUnavailable,
     creepage_input_issue,
     creepage_measurements,
+    creepage_threshold_for_pair,
     creepage_threshold_mm,
     has_creepage_input,
     merged_safety_params,
@@ -23,8 +24,8 @@ from .engine import (
 class CreepageChecker(BaseChecker):
     check_item_id = "SAF-02"
     name = "爬电距离"
-    version = "1.0.0"
-    owner = "电气安规 宋馨雨"
+    version = "2.0.0"
+    owner = "电气安规 宋馨雨、汪琪竣"
     process_types = ("safety",)
     requires = ("faces", "multiple_parts")
     default_params = {
@@ -32,6 +33,8 @@ class CreepageChecker(BaseChecker):
         "working_voltage_v": 400,
         "pollution_degree": 2,
         "material_group": "II",
+        "working_voltage_source": "network_difference",
+        "insulation_environment": "inner",
         "mesh_weld_tolerance_mm": 0.001,
         "terminal_vertex_count": 3,
         "creepage_confidence": 0.9,
@@ -44,8 +47,26 @@ class CreepageChecker(BaseChecker):
         except ThresholdUnavailable as exc:
             return False, str(exc)
         networks = resolve_networks(model, merged)
-        if len(networks) < 2 or not network_pairs(networks, model, merged):
+        pairs = network_pairs(networks, model, merged)
+        if len(networks) < 2 or not pairs:
             return False, "缺少至少两个不同电位的网络；请配置 meta.safety.networks"
+        explicit = merged.get("creepage_measurements")
+        if explicit is None:
+            explicit = (model.meta.get("safety", {}) or {}).get("creepage_measurements", [])
+        for network_a, network_b in pairs:
+            pair_measurement = next((
+                item for item in (explicit or [])
+                if isinstance(item, dict)
+                and {str(item.get("network_a") or item.get("a") or ""),
+                     str(item.get("network_b") or item.get("b") or "")}
+                == {network_a.network_id, network_b.network_id}
+            ), None)
+            try:
+                creepage_threshold_for_pair(
+                    merged, network_a, network_b, pair_measurement
+                )
+            except ThresholdUnavailable as exc:
+                return False, str(exc)
         if not has_creepage_input(model, merged):
             return False, "缺少绝缘表面图、绝缘体 STL 或已测爬电路径"
         issue = creepage_input_issue(model, merged)
@@ -65,34 +86,37 @@ class CreepageChecker(BaseChecker):
         for item in measurements:
             if item.compliant:
                 continue
+            item_threshold = item.threshold_mm
+            item_source = item.extra.get("source_standard") or source
             findings.append(
                 ctx.finding(
                     severity="P0",
                     message=(
                         f"网络 {item.network_a} ↔ {item.network_b} 爬电距离 "
-                        f"{item.measured_mm:.3f} mm < 要求 {threshold:.3f} mm"
+                        f"{item.measured_mm:.3f} mm < 要求 {item_threshold:.3f} mm"
                     ),
                     part_refs=item.part_refs,
                     location=item.location,
                     path_points=item.path_points,
                     measured_value=round(item.measured_mm, 6),
-                    threshold_value=threshold,
+                    threshold_value=item_threshold,
                     confidence=item.confidence,
                     suggestion_text=(
-                        f"延长绝缘表面路径至 {threshold:.3f} mm 以上；"
+                        f"延长绝缘表面路径至 {item_threshold:.3f} mm 以上；"
                         "可增加绝缘筋/沟槽或调整端子在绝缘表面的接触边界。"
                     ),
                     suggestion_delta={
-                        "target_creepage_mm": threshold,
-                        "increase_mm": round(threshold - item.measured_mm, 6),
+                        "target_creepage_mm": item_threshold,
+                        "increase_mm": round(item_threshold - item.measured_mm, 6),
                     },
                     face_ids=item.face_ids,
-                    note=f"{item.note}；阈值来源：{source}",
+                    note=f"{item.note}；阈值来源：{item_source}",
                     extra={
                         "network_a": item.network_a,
                         "network_b": item.network_b,
                         "method": item.method,
-                        "source_standard": source,
+                        "source_standard": item_source,
+                        "rule_inputs": item.extra.get("rule_inputs", {}),
                         "path_vertex_count": len(item.path_points),
                         "path_rules": item.extra.get("path_rules", {}),
                     },

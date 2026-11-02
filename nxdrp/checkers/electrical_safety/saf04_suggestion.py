@@ -22,8 +22,8 @@ from .engine import (
 class SafetySuggestionChecker(BaseChecker):
     check_item_id = "SAF-04"
     name = "安规量化建议"
-    version = "1.0.0"
-    owner = "电气安规 宋馨雨"
+    version = "2.0.0"
+    owner = "电气安规 宋馨雨、汪琪竣"
     process_types = ("safety",)
     requires = ("faces", "multiple_parts")
     default_params = {
@@ -32,6 +32,8 @@ class SafetySuggestionChecker(BaseChecker):
         "pollution_degree": 2,
         "material_group": "II",
         "overvoltage_category": "III",
+        "working_voltage_source": "network_difference",
+        "insulation_environment": "inner",
         "target_margin_mm": 0.5,
     }
 

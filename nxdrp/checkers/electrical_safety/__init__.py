@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""电气安规 智能安规检查（IEC 60664-1）——负责人：宋馨雨。"""
+"""电气安规检查（IEC 60664-1）——V2：宋馨雨、汪琪竣。"""
 
 from .saf01_clearance import ClearanceChecker
 from .saf02_creepage import CreepageChecker

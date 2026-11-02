@@ -1,6 +1,6 @@
 # 智能安规检查（自研算法）
 
-**负责人**：宋馨雨　　**目录**：`nxdrp/checkers/electrical_safety/`
+**V2 小组**：宋馨雨（组长）、汪琪竣　　**目录**：`nxdrp/checkers/electrical_safety/`
 
 ## 这个模块在解决什么
 
@@ -21,6 +21,31 @@
 先做 SAF-01 电气间隙——本质是两点距离，几何上有标准解法，把链路打通。
 再攻 SAF-02 爬电距离——沿绝缘件曲面找最短路，这是全项目唯一需要科研攻关的地方。
 同时把 AutoCrear 装起来，能独立跑出一次爬电结果，后面拿它当基准。
+
+## V2 规则模型
+
+V2 将“测量”和“规则判定”分开，并按每一对电气网络保存判定输入：
+
+- SAF-01：IEC 60664-1:2020 Table F.1 → F.2，海拔超过 2 000 m 时再用 Table A.2；
+- SAF-02：优先读取配对记录中的 `working_voltage_v` / `max_voltage_difference_v`，否则在
+  `working_voltage_source=network_difference` 时计算两个网络 `potential_v` 的绝对差，按
+  Table F.5、污染等级和 CTI/材料组查表；
+- `insulation_environment` 接受 `inner`、`coating`、`outer`，当前作为可追溯工况保存，
+  不在没有正式标准依据时自行增加倍率；
+- 每条 finding 的 `extra.rule_inputs` 和 `extra.source_standard` 记录实际查表输入与表号。
+
+网络配对可以写成：
+
+```json
+{
+  "a": "HV",
+  "b": "LV",
+  "max_voltage_difference_v": 400,
+  "insulation_environment": "inner"
+}
+```
+
+完整证据映射和当前边界见 [`AUTOCREAR_RULE_MAPPING.md`](AUTOCREAR_RULE_MAPPING.md)。
 
 ## 三个命令
 
@@ -50,7 +75,7 @@ python -m unittest discover -s tests
 1.检查项都已注册：
     python -m nxdrp checkers
 2.项目测试
-    python -m unittest nxdrp.checkers.electrical_safety.test_electrical_safety -v
+    python -m unittest nxdrp.checkers.electrical_safety.test_safety -v
     python -m unittest discover -s tests
 3.具体checker
     python -m nxdrp check nxdrp/checkers/electrical_safety/electrical_safety_mock.model.json -r rules/dfm_default.json --only SAF-01,SAF-02,SAF-03,SAF-04 

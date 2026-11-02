@@ -56,6 +56,9 @@ class SafetyMeasurement:
 
     @property
     def compliant(self) -> bool:
+        # AutoCrearCMD carries a serialized ViolationTolerance object through
+        # its rule-result structure, but its final requirement getters do not
+        # consume either member. Preserve the observable strict boundary.
         return self.measured_mm + 1e-9 >= self.threshold_mm
 
     @property
@@ -101,7 +104,18 @@ def merged_safety_params(model: ModelBundle, params: dict) -> dict:
     meta = _safety_meta(model)
     profile = meta.get("profile")
     if isinstance(profile, dict):
+        # A measured CTI must be allowed to derive the material group instead
+        # of being masked by a generic rule default, and vice versa.
+        if "cti" in profile and "material_group" not in profile:
+            merged.pop("material_group", None)
+        if "material_group" in profile and "cti" not in profile:
+            merged.pop("cti", None)
         merged.update(profile)
+    # Pair records carry AutoCrear-compatible per-pair rule inputs (maximum
+    # voltage difference and environment).  Make them visible to the threshold
+    # resolver while retaining explicit rule parameters as the higher priority.
+    if "network_pairs" not in merged and isinstance(meta.get("network_pairs"), list):
+        merged["network_pairs"] = meta["network_pairs"]
     return merged
 
 
@@ -192,6 +206,9 @@ def _rated_voltage_row(rows: list[dict], rated: float, params: dict) -> dict:
 def _clearance_altitude_factor(
     profiles: dict, altitude: float, explicit: Any
 ) -> tuple[float, str]:
+    # AutoCrear's deprecated configuration adapter represents the same final
+    # operation as "Permanent Voltage: Requirements multiplied by <factor>":
+    # the factor scales the required distance, never the measured geometry.
     if explicit is not None:
         factor = float(explicit)
         if factor <= 0:
@@ -353,6 +370,144 @@ def creepage_threshold_mm(params: dict) -> tuple[float, str]:
     return round(value, 6), source
 
 
+def _pair_profile(
+    params: dict,
+    network_a: ElectricalNetwork,
+    network_b: ElectricalNetwork,
+) -> dict:
+    """Return optional pair-specific rule inputs without guessing a pairing.
+
+    AutoCrear standard tables are keyed by a maximum voltage difference and
+    an insulation environment.  The project contract keeps those inputs on
+    the explicit network-pair record so every selected threshold is auditable.
+    """
+    wanted = {network_a.network_id, network_b.network_id}
+    for item in params.get("network_pairs", []) or []:
+        if not isinstance(item, dict):
+            continue
+        ids = {str(item.get("a") or ""), str(item.get("b") or "")}
+        if ids == wanted:
+            return dict(item)
+    return {}
+
+
+def _insulation_environment(value: Any) -> str:
+    text = str(value or "inner").strip().lower()
+    aliases = {
+        "inside": "inner",
+        "internal": "inner",
+        "coated": "coating",
+        "coat": "coating",
+        "outside": "outer",
+        "external": "outer",
+    }
+    text = aliases.get(text, text)
+    if text not in ("inner", "coating", "outer"):
+        raise ThresholdUnavailable(
+            "绝缘环境 insulation_environment 必须为 inner/coating/outer"
+        )
+    return text
+
+
+def creepage_threshold_for_pair(
+    params: dict,
+    network_a: ElectricalNetwork,
+    network_b: ElectricalNetwork,
+    measurement: dict | None = None,
+) -> tuple[float, str, dict[str, Any]]:
+    """Resolve the IEC creepage threshold for one electrical-network pair.
+
+    Input precedence is measurement -> explicit pair profile -> rule profile.
+    In ``network_difference`` mode both network potentials are mandatory; a
+    missing potential is reported instead of silently falling back to a value.
+    """
+    pair = _pair_profile(params, network_a, network_b)
+    item = measurement if isinstance(measurement, dict) else {}
+    resolved = dict(params)
+    direct = resolved.get("min_creepage_mm") is not None
+    voltage_source = "rule working_voltage_v/rated_voltage_v"
+    voltage = None
+
+    for key in (
+        "pollution_degree",
+        "material_group",
+        "cti",
+        "printed_wiring_material",
+        "interpolate_creepage",
+    ):
+        source = item if key in item else pair if key in pair else None
+        if source is None:
+            continue
+        if key == "cti" and "material_group" not in source:
+            resolved.pop("material_group", None)
+        if key == "material_group" and "cti" not in source:
+            resolved.pop("cti", None)
+        resolved[key] = source[key]
+
+    for source_name, source in (("measurement", item), ("network_pair", pair)):
+        candidate = source.get("working_voltage_v")
+        if candidate is None:
+            candidate = source.get("max_voltage_difference_v")
+        if candidate is not None:
+            voltage = float(candidate)
+            voltage_source = f"{source_name}.working/max_voltage_difference_v"
+            break
+
+    mode = str(resolved.get("working_voltage_source", "rule")).strip().lower()
+    mode_aliases = {
+        "potential_difference": "network_difference",
+        "network_potential_difference": "network_difference",
+        "autocrear": "network_difference",
+        "configured": "rule",
+    }
+    mode = mode_aliases.get(mode, mode)
+    if mode not in ("rule", "network_difference"):
+        raise ThresholdUnavailable(
+            "working_voltage_source 必须为 rule 或 network_difference"
+        )
+
+    if voltage is None and mode == "network_difference" and not direct:
+        if network_a.potential_v is None or network_b.potential_v is None:
+            raise ThresholdUnavailable(
+                f"网络 {network_a.network_id}/{network_b.network_id} 缺少 potential_v，"
+                "无法计算最大电压差"
+            )
+        voltage = abs(float(network_a.potential_v) - float(network_b.potential_v))
+        voltage_source = "abs(network_a.potential_v - network_b.potential_v)"
+
+    if voltage is not None:
+        if voltage <= 0 and not direct:
+            raise ThresholdUnavailable(
+                f"网络 {network_a.network_id}/{network_b.network_id} 的工作电压差必须大于 0"
+            )
+        resolved["working_voltage_v"] = voltage
+
+    environment = _insulation_environment(
+        item.get(
+            "insulation_environment",
+            pair.get(
+                "insulation_environment",
+                resolved.get("insulation_environment", "inner"),
+            ),
+        )
+    )
+    threshold, source = creepage_threshold_mm(resolved)
+    rule_inputs = {
+        "working_voltage_v": resolved.get(
+            "working_voltage_v", resolved.get("rated_voltage_v")
+        ),
+        "working_voltage_source": voltage_source,
+        "insulation_environment": environment,
+        "pollution_degree": resolved.get("pollution_degree", 2),
+        "material_group": resolved.get("material_group"),
+        "cti": resolved.get("cti"),
+        "printed_wiring_material": bool(
+            resolved.get("printed_wiring_material", False)
+        ),
+    }
+    return threshold, source, rule_inputs
+
+
 def _point(value: Any) -> tuple[float, float, float] | None:
     if not isinstance(value, (list, tuple)) or len(value) < 3:
         return None
@@ -492,6 +647,8 @@ def _measurement_from_dict(
     kind: str,
     threshold: float,
     networks: dict[str, ElectricalNetwork],
+    source_standard: str = "",
+    rule_inputs: dict[str, Any] | None = None,
 ) -> SafetyMeasurement | None:
     try:
         value = float(item.get("distance_mm", item.get("measured_mm")))
@@ -530,6 +687,10 @@ def _measurement_from_dict(
         p2=_point(item.get("p2")),
         path_points=[x for x in path if x is not None],
         note=str(item.get("note") or "由模型安规元数据提供"),
+        extra={
+            "source_standard": source_standard,
+            "rule_inputs": dict(rule_inputs or {}),
+        },
     )
 
 
@@ -658,16 +819,10 @@ def creepage_input_issue(model: ModelBundle, params: dict) -> str:
 
 #当前模型 + 当前这些参数如果算过，直接用
 def _cache_key(model: ModelBundle, kind: str, params: dict) -> tuple[int, str, str]:
-    relevant = {
-        key: params.get(key)
-        for key in (
-            "networks", "network_pairs", "clearance_measurements", "creepage_measurements",
-            "surface_graph", "surface_mesh_path", "allow_bbox_fallback",
-            "min_clearance_mm", "min_creepage_mm", "rated_voltage_v", "working_voltage_v",
-            "pollution_degree", "material_group", "overvoltage_category", "altitude_m",
-        )
-    }
-    relevant["meta"] = _safety_meta(model)
+    # Hash the complete merged rule input.  A whitelist previously omitted CTI,
+    # field condition, altitude factor and path controls, which could reuse a
+    # stale result after an engineering parameter changed.
+    relevant = {"params": params, "meta": _safety_meta(model)}
     return id(model), kind, _json_digest(relevant)
 
 
@@ -706,8 +861,23 @@ def clearance_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
         raise SafetyInputError("至少需要两个不同电位的电气网络")
 
     #去JSON里找有没有提前写好的，有，解析成标准格式，存入缓存，直接返回
+    _, threshold_source = clearance_threshold_mm(params)
     explicit = [
-        _measurement_from_dict(model, item, "clearance", threshold, by_id)
+        _measurement_from_dict(
+            model,
+            item,
+            "clearance",
+            threshold,
+            by_id,
+            threshold_source,
+            {
+                "rated_voltage_v": params.get("rated_voltage_v"),
+                "pollution_degree": params.get("pollution_degree", 2),
+                "overvoltage_category": params.get("overvoltage_category"),
+                "field_condition": params.get("field_condition", "case_a"),
+                "altitude_m": params.get("altitude_m", 2000),
+            },
+        )
         for item in _explicit_measurements(model, params, "clearance_measurements")
     ]
     explicit = [x for x in explicit if x is not None]
@@ -789,6 +959,16 @@ def clearance_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
                     p1=item["p1"] or fa.cog or (fa.bbox.center if fa.bbox else None),
                     p2=item["p2"] or fb.cog or (fb.bbox.center if fb.bbox else None),
                     note="NX Measurement.GetMinimumDistance 批量精确测距",
+                    extra={
+                        "source_standard": threshold_source,
+                        "rule_inputs": {
+                            "rated_voltage_v": params.get("rated_voltage_v"),
+                            "pollution_degree": params.get("pollution_degree", 2),
+                            "overvoltage_category": params.get("overvoltage_category"),
+                            "field_condition": params.get("field_condition", "case_a"),
+                            "altitude_m": params.get("altitude_m", 2000),
+                        },
+                    },
                 )
             )
             continue
@@ -828,6 +1008,16 @@ def clearance_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
                 p1=p1,
                 p2=p2,
                 note="包围盒粗筛下界，必须由 NX 或 AutoCrear 复核",
+                extra={
+                    "source_standard": threshold_source,
+                    "rule_inputs": {
+                        "rated_voltage_v": params.get("rated_voltage_v"),
+                        "pollution_degree": params.get("pollution_degree", 2),
+                        "overvoltage_category": params.get("overvoltage_category"),
+                        "field_condition": params.get("field_condition", "case_a"),
+                        "altitude_m": params.get("altitude_m", 2000),
+                    },
+                },
             )
         )
     return _store_measurements(model, "clearance", key, results)
@@ -1029,10 +1219,27 @@ def creepage_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
     if len(networks) < 2 or not pairs:
         raise SafetyInputError("至少需要两个不同电位的电气网络")
 
-    explicit = [
-        _measurement_from_dict(model, item, "creepage", threshold, by_id)
-        for item in _explicit_measurements(model, params, "creepage_measurements")
-    ]
+    explicit = []
+    for item in _explicit_measurements(model, params, "creepage_measurements"):
+        a = str(item.get("network_a") or item.get("a") or "")
+        b = str(item.get("network_b") or item.get("b") or "")
+        na, nb = by_id.get(a), by_id.get(b)
+        if na is None or nb is None:
+            continue
+        pair_threshold, pair_source, rule_inputs = creepage_threshold_for_pair(
+            params, na, nb, item
+        )
+        parsed = _measurement_from_dict(
+            model,
+            item,
+            "creepage",
+            pair_threshold,
+            by_id,
+            pair_source,
+            rule_inputs,
+        )
+        if parsed is not None:
+            explicit.append(parsed)
     explicit = [x for x in explicit if x is not None]
     if explicit:
         return _store_measurements(model, "creepage", key, explicit)
@@ -1058,6 +1265,9 @@ def creepage_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
     results = []
     #遍历每一对需要测试的网络
     for na, nb in pairs:
+        pair_threshold, pair_source, rule_inputs = creepage_threshold_for_pair(
+            params, na, nb
+        )
         starts = _terminal_nodes(
             terminals.get(na.network_id, []), len(nodes), na.network_id
         )
@@ -1086,7 +1296,7 @@ def creepage_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
                 network_a=na.network_id,
                 network_b=nb.network_id,
                 measured_mm=value,
-                threshold_mm=threshold,
+                threshold_mm=pair_threshold,
                 method=method,
                 confidence=float(params.get("creepage_confidence", 0.9)),
                 part_refs=list(dict.fromkeys(na.part_ids + nb.part_ids)),
@@ -1098,7 +1308,11 @@ def creepage_measurements(ctx, threshold: float) -> list[SafetyMeasurement]:
                     "沿绝缘表面图的最短路径；沟槽、绝缘筋和倒角仅按显式边元数据处理"
                     + rule_note
                 ),
-                extra={"path_rules": dict(path_rule_info)},
+                extra={
+                    "path_rules": dict(path_rule_info),
+                    "source_standard": pair_source,
+                    "rule_inputs": rule_inputs,
+                },
             )
         )
     return _store_measurements(model, "creepage", key, results)

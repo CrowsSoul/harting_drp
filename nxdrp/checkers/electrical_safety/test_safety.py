@@ -160,6 +160,96 @@ class TestCreepageChecker(unittest.TestCase):
         self.assertEqual(result.results[0].status, "skipped")
         self.assertIn("路径", result.results[0].reason)
 
+    def test_uses_network_pair_voltage_difference_for_each_threshold(self):
+        model = safety_model(path_length=4.0)
+        model.parts.append(
+            Part("P04", name="MID_TERMINAL", material="Cu", bbox=BBox(2, 0, 0, 3, 1, 1))
+        )
+        model.faces.append(
+            Face("F4", "P04", tag=4, solid_face_type="planar", cog=(2, 0, 0),
+                 bbox=BBox(2, 0, 0, 2, 1, 1), edge_count=4)
+        )
+        safety = model.meta["safety"]
+        safety["networks"] = [
+            {"network_id": "HV", "part_ids": ["P01"], "face_ids": ["F1"], "potential_v": 400},
+            {"network_id": "MID", "part_ids": ["P04"], "face_ids": ["F4"], "potential_v": 100},
+            {"network_id": "LV", "part_ids": ["P02"], "face_ids": ["F2"], "potential_v": 0},
+        ]
+        safety["network_pairs"] = [
+            {"a": "LV", "b": "MID", "insulation_environment": "coating"},
+            {"a": "LV", "b": "HV", "insulation_environment": "outer"},
+        ]
+        safety["creepage_measurements"] = [
+            {"network_a": "LV", "network_b": "MID", "distance_mm": 0.5},
+            {"network_a": "LV", "network_b": "HV", "distance_mm": 0.5},
+        ]
+        result = execute(model, CreepageChecker(), {
+            "pollution_degree": 2,
+            "material_group": "II",
+            "working_voltage_source": "network_difference",
+        })
+        findings = {
+            tuple(sorted((item.extra["network_a"], item.extra["network_b"]))): item
+            for item in result.findings
+        }
+        self.assertAlmostEqual(findings[("LV", "MID")].threshold_value, 1.0)
+        self.assertAlmostEqual(findings[("HV", "LV")].threshold_value, 2.8)
+        self.assertEqual(
+            findings[("LV", "MID")].extra["rule_inputs"]["insulation_environment"],
+            "coating",
+        )
+        self.assertEqual(
+            findings[("HV", "LV")].extra["rule_inputs"]["working_voltage_v"],
+            400.0,
+        )
+        self.assertIn("Table F.5", findings[("HV", "LV")].extra["source_standard"])
+
+    def test_pair_profile_voltage_overrides_network_potentials(self):
+        model = safety_model(path_length=1.0)
+        model.meta["safety"]["network_pairs"] = [
+            {"a": "HV", "b": "LV", "max_voltage_difference_v": 250}
+        ]
+        result = execute(model, CreepageChecker(), {
+            "pollution_degree": 2,
+            "material_group": "II",
+            "working_voltage_source": "network_difference",
+        })
+        self.assertEqual(len(result.findings), 1)
+        self.assertAlmostEqual(result.findings[0].threshold_value, 1.8)
+        self.assertEqual(
+            result.findings[0].extra["rule_inputs"]["working_voltage_source"],
+            "network_pair.working/max_voltage_difference_v",
+        )
+
+    def test_pair_cti_overrides_generic_material_group(self):
+        model = safety_model(path_length=1.0)
+        model.meta["safety"]["network_pairs"] = [
+            {"a": "HV", "b": "LV", "cti": 650}
+        ]
+        result = execute(model, CreepageChecker(), {
+            "pollution_degree": 2,
+            "material_group": "II",
+            "working_voltage_source": "network_difference",
+        })
+        self.assertEqual(len(result.findings), 1)
+        self.assertAlmostEqual(result.findings[0].threshold_value, 2.0)
+        self.assertEqual(result.findings[0].extra["rule_inputs"]["cti"], 650)
+        self.assertIsNone(
+            result.findings[0].extra["rule_inputs"]["material_group"]
+        )
+
+    def test_network_difference_mode_requires_potentials(self):
+        model = safety_model(path_length=1.0)
+        model.meta["safety"]["networks"][0].pop("potential_v")
+        result = execute(model, CreepageChecker(), {
+            "pollution_degree": 2,
+            "material_group": "II",
+            "working_voltage_source": "network_difference",
+        })
+        self.assertEqual(result.findings, [])
+        self.assertEqual(result.results[0].status, "skipped")
+        self.assertIn("potential_v", result.results[0].reason)
+
 
 class TestSummaryAndSuggestion(unittest.TestCase):
     def test_four_checkers_work_together(self):
@@ -211,6 +301,19 @@ class TestIecRuleTables(unittest.TestCase):
                 self.assertIn("Table F.1", source)
                 self.assertIn("Table F.2", source)
 
+    def test_clearance_explicit_altitude_factor_multiplies_requirement(self):
+        threshold, source = clearance_threshold_mm({
+            "rated_voltage_v": 50,
+            "overvoltage_category": "I",
+            "field_condition": "case_a",
+            "pollution_degree": 2,
+            "altitude_m": 5000,
+            "altitude_correction_factor": 1.5,
+        })
+        self.assertAlmostEqual(threshold, 0.3)
+        self.assertIn("explicit altitude_correction_factor", source)
+        self.assertIn("factor 1.5", source)
+
     def test_creepage_uses_f5_for_pd1_pd2_pd3(self):
         expected = {1: 1.0, 2: 2.8, 3: 5.6}
         for pollution, value in expected.items():
@@ -254,6 +357,19 @@ class TestIecRuleTables(unittest.TestCase):
         self.assertEqual(merged["pollution_degree"], 1)
         self.assertIn("iec_profile_path", merged)
 
+    def test_model_cti_can_replace_generic_material_group(self):
+        model = safety_model()
+        model.meta["safety"]["profile"] = {"cti": 650}
+        merged = merged_safety_params(model, {
+            "working_voltage_v": 400,
+            "pollution_degree": 2,
+            "material_group": "II",
+        })
+        self.assertNotIn("material_group", merged)
+        threshold, source = creepage_threshold_mm(merged)
+        self.assertAlmostEqual(threshold, 2.0)
+        self.assertIn("group I", source)
+
     def test_controlled_mock_exports_measurements(self):
         root = Path(__file__).resolve().parents[3]
         result = measure(
@@ -272,6 +388,8 @@ class TestIecRuleTables(unittest.TestCase):
         self.assertFalse(clearance["compliant"])
         self.assertAlmostEqual(creepage["threshold_mm"], 2.8)
         self.assertTrue(creepage["compliant"])
+        self.assertIn("Table F.5", creepage["source_standard"])
+        self.assertEqual(creepage["rule_inputs"]["working_voltage_v"], 400.0)
 
 
 class TestAutoCrearComparison(unittest.TestCase):

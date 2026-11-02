@@ -23,8 +23,8 @@ from .engine import (
 class ClearanceChecker(BaseChecker):
     check_item_id = "SAF-01"
     name = "电气间隙"
-    version = "1.0.0"
-    owner = "电气安规 宋馨雨"
+    version = "2.0.0"
+    owner = "电气安规 宋馨雨、汪琪竣"
     process_types = ("safety",)
     requires = ("faces", "multiple_parts")
     default_params = {
@@ -69,7 +69,9 @@ class ClearanceChecker(BaseChecker):
             if item.compliant:
                 continue
             coarse = item.method == "bbox-lower-bound"
-            suggestion_target = threshold
+            item_threshold = item.threshold_mm
+            item_source = item.extra.get("source_standard") or source
+            suggestion_target = item_threshold
             #打包错误信息
             findings.append(
                 ctx.finding(
@@ -77,7 +79,7 @@ class ClearanceChecker(BaseChecker):
                     severity="P3" if coarse else "P0",
                     message=(
                         f"网络 {item.network_a} ↔ {item.network_b} 电气间隙 "
-                        f"{item.measured_mm:.3f} mm < 要求 {threshold:.3f} mm"
+                        f"{item.measured_mm:.3f} mm < 要求 {item_threshold:.3f} mm"
                         + ("（包围盒粗筛，需精确复核）" if coarse else "")
                     ),
                     #涉及哪几个零件
@@ -87,7 +89,7 @@ class ClearanceChecker(BaseChecker):
                     #实测值（保留6位）
                     measured_value=round(item.measured_mm, 6),
                     #及格线
-                    threshold_value=threshold,
+                    threshold_value=item_threshold,
                     #置信度（粗筛 0.55，精确 0.99）
                     confidence=item.confidence,
                     suggestion_text=(
@@ -96,17 +98,18 @@ class ClearanceChecker(BaseChecker):
                     ),
                     suggestion_delta={
                         "target_clearance_mm": suggestion_target,
-                        "increase_mm": round(threshold - item.measured_mm, 6),
+                        "increase_mm": round(item_threshold - item.measured_mm, 6),
                     },
                     face_ids=item.face_ids,
-                    note=f"{item.note}；阈值来源：{source}",
+                    note=f"{item.note}；阈值来源：{item_source}",
                     extra={
                         "network_a": item.network_a,
                         "network_b": item.network_b,
                         "method": item.method,
                         "p1": list(item.p1) if item.p1 else None,
                         "p2": list(item.p2) if item.p2 else None,
-                        "source_standard": source,
+                        "source_standard": item_source,
+                        "rule_inputs": item.extra.get("rule_inputs", {}),
                     },
                 )
             )

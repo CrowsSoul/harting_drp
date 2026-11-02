@@ -43,6 +43,33 @@
           "params": {
             "type": "object"
           },
+          "expression": {
+            "type": "object"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "rounding": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "reference": {
+            "type": "string"
+          },
+          "formula_ref": {
+            "type": "string"
+          },
+          "formula": {
+            "type": "object"
+          },
           "source_standard": {
             "type": "string"
           },

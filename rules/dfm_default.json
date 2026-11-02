@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "name": "dfm_default",
-  "version": "0.4",
-  "updated_at": "2026-10-28T10:10:00+08:00",
+  "version": "0.9",
+  "updated_at": "2026-10-30T14:41:32+08:00",
   "rules": [
     {
       "rule_id": "R-DFM-01",
@@ -17,11 +17,24 @@
         "min_overlap_extent_mm": 0.05,
         "confidence_crude": 0.5
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P1",
       "notes": "两两实体求交，体积>0；需区分硬干涉/临界间隙/碎面虚假干涉",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.volume_mm3 > params.interference_volume_mm3 + 1e-9",
+            "measured": "meas.volume_mm3",
+            "threshold": "params.interference_volume_mm3",
+            "note": "实体重叠体积超过阈值"
+          }
+        ]
+      },
+      "unit": "mm^3",
+      "rounding": 6,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_ComponentInterference.html（存在干涉即失败，无体积阈值）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-01.md"
     },
     {
       "rule_id": "R-DFM-02",
@@ -33,11 +46,31 @@
         "min_clearance_mm": 0.3,
         "confidence_crude": 0.55
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目评测边界，见 docs/DEMO_SCENE.md（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "零件间最小距离 < 阈值（默认 0.2~0.5mm，可配）",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.precise == 1 and meas.gap_mm <= params.min_clearance_mm + 1e-9",
+            "measured": "meas.gap_mm",
+            "threshold": "params.min_clearance_mm",
+            "note": "精确测距最小间隙不足"
+          },
+          {
+            "when": "meas.precise == 0 and meas.gap_mm <= params.min_clearance_mm + 1e-9",
+            "severity": "P3",
+            "measured": "meas.gap_mm",
+            "threshold": "params.min_clearance_mm",
+            "note": "包围盒粗筛间隙不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 6,
+      "reference": "Check-Mate 无直接对应（DFA/装配间隙分析 mqc_check_assembly_clearance_analysis.dfa 可作参考）；公式为项目基线；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-02.md"
     },
     {
       "rule_id": "R-DFM-03",
@@ -52,11 +85,24 @@
         "candidate_search_radius_mm": 2.0,
         "candidate_angle_deg": 10.0
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "跨零件孔轴线同轴度偏差 ≤ 允许值，且公称直径匹配",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.offset_mm > params.axis_offset_tolerance_mm + 1e-9 or meas.diameter_delta_mm > params.diameter_tolerance_mm + 1e-9 or meas.angle_deg > params.axis_angle_tolerance_deg + 1e-9",
+            "measured": "meas.offset_mm",
+            "threshold": "params.axis_offset_tolerance_mm",
+            "note": "轴线偏差/直径差/夹角任一超差"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 6,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_HoleAlignment.html（search_dist 1 mm、max_distance 0 mm、max_angle 0°）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-03.md"
     },
     {
       "rule_id": "R-DFM-04",
@@ -70,11 +116,24 @@
         "candidate_search_radius_mm": 3.0,
         "candidate_angle_deg": 10.0
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "槽中线与孔轴线偏差 ≤ 允许值",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.offset_mm > params.center_offset_tolerance_mm + 1e-9 or meas.angle_deg > params.axis_angle_tolerance_deg + 1e-9",
+            "measured": "meas.offset_mm",
+            "threshold": "params.center_offset_tolerance_mm",
+            "note": "孔/槽中心偏差或夹角超差"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 6,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotToHoleAlignment.html（ang_max 0.1°、dist_max 0.01 mm）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-04.md"
     },
     {
       "rule_id": "R-DFM-05",
@@ -86,11 +145,36 @@
         "tool_envelope_diameter_mm": 10.0,
         "tool_envelope_height_mm": 40.0
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P1",
       "notes": "沿螺栓轴线扫掠工具包络，不得与周边件碰撞",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.accessible_flag == 1",
+            "measured": "if(meas.diameter_present == 1, meas.diameter_mm, if(meas.height_present == 1, meas.height_mm, 0))",
+            "threshold": "if(meas.diameter_present == 1, params.tool_envelope_diameter_mm, if(meas.height_present == 1, params.tool_envelope_height_mm, params.tool_envelope_diameter_mm))",
+            "note": "上游标注不可达"
+          },
+          {
+            "when": "meas.diameter_present == 1 and meas.diameter_mm < params.tool_envelope_diameter_mm - 1e-9",
+            "measured": "if(meas.diameter_present == 1, meas.diameter_mm, if(meas.height_present == 1, meas.height_mm, 0))",
+            "threshold": "if(meas.diameter_present == 1, params.tool_envelope_diameter_mm, if(meas.height_present == 1, params.tool_envelope_height_mm, params.tool_envelope_diameter_mm))",
+            "note": "可用工具直径不足"
+          },
+          {
+            "when": "meas.height_present == 1 and meas.height_mm < params.tool_envelope_height_mm - 1e-9",
+            "measured": "if(meas.diameter_present == 1, meas.diameter_mm, if(meas.height_present == 1, meas.height_mm, 0))",
+            "threshold": "if(meas.diameter_present == 1, params.tool_envelope_diameter_mm, if(meas.height_present == 1, params.tool_envelope_height_mm, params.tool_envelope_diameter_mm))",
+            "note": "可用工具高度不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerAccess.html（min_head_clearance 2 mm、min_insertion_clearance 2 mm）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-05.md"
     },
     {
       "rule_id": "R-DFM-06",
@@ -102,11 +186,30 @@
         "axial_clearance_mm": 0.5,
         "radial_clearance_mm": 0.5
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目工程经验默认值（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "螺栓头/垫圈与周边件的轴向、径向间隙 ≥ 阈值",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.direction == 1 and meas.clearance_mm < params.radial_clearance_mm - 1e-9",
+            "measured": "meas.clearance_mm",
+            "threshold": "params.radial_clearance_mm",
+            "note": "径向间隙不足"
+          },
+          {
+            "when": "meas.direction == 2 and meas.clearance_mm < params.axial_clearance_mm - 1e-9",
+            "measured": "meas.clearance_mm",
+            "threshold": "params.axial_clearance_mm",
+            "note": "轴向间隙不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerClearance.html（min_tip_clearance 1 mm、min_through_hole_clearance 0.1 mm）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-06.md"
     },
     {
       "rule_id": "R-DFM-07",
@@ -118,11 +221,24 @@
         "engagement_ratio_steel": 1.0,
         "engagement_ratio_plastic": 1.5
       },
-      "version": "0.1",
+      "version": "0.3",
       "source_standard": "项目任务定义默认值，见 docs/TEAM_TASKS.md（待甲方工艺工程师确认）",
       "severity": "P2",
       "notes": "螺纹旋合长度/公称直径 ≥ 1.0（钢）~1.5（铝/塑料）",
-      "owner": "装配"
+      "owner": "装配",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.engagement_ratio < if(meas.is_soft == 1, params.engagement_ratio_plastic, params.engagement_ratio_steel) - 1e-9",
+            "measured": "meas.engagement_ratio",
+            "threshold": "if(meas.is_soft == 1, params.engagement_ratio_plastic, params.engagement_ratio_steel)",
+            "note": "啮合长度比 L/D 不足"
+          }
+        ]
+      },
+      "unit": "ratio",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FastenerEngagement.html（min_eng_len_diam_ratio 默认 1.5）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-07.md"
     },
     {
       "rule_id": "R-DFM-08",
@@ -150,11 +266,31 @@
         "min_inspect_area_mm2": 0.1,
         "critical_wall_ratio": 0.75
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 材料工艺基线 v0.2；待甲方材料库和厂标替换",
       "severity": "P1",
       "notes": "壁厚 < 材料最小壁厚（PC 1.5 / PA66 0.8 / PBT 0.8 …）",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.thickness < table(params.material_min_wall_thickness_mm, meas.material) * params.critical_wall_ratio",
+            "severity": "P1",
+            "measured": "meas.thickness",
+            "threshold": "table(params.material_min_wall_thickness_mm, meas.material)",
+            "note": "低于材料临界壁厚"
+          },
+          {
+            "when": "meas.thickness < table(params.material_min_wall_thickness_mm, meas.material)",
+            "measured": "meas.thickness",
+            "threshold": "table(params.material_min_wall_thickness_mm, meas.material)",
+            "note": "低于材料最小壁厚"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-08.md（材料最小壁厚表 × 临界倍率的项目基线）"
     },
     {
       "rule_id": "R-DFM-09",
@@ -172,11 +308,24 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 均匀壁厚基线 v0.2；待甲方外观件验收标准确认",
       "severity": "P2",
       "notes": "局部壁厚/名义壁厚超出 [0.8,1.25] 的面积占比 > 阈值",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.area_ratio > params.max_area_ratio",
+            "measured": "meas.area_ratio * 100",
+            "threshold": "params.max_area_ratio * 100",
+            "note": "超出名义壁厚的面积占比超限"
+          }
+        ]
+      },
+      "unit": "%",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-09.md（均匀壁厚面积占比的项目基线）"
     },
     {
       "rule_id": "R-DFM-10",
@@ -191,11 +340,24 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 壁厚过渡经验基线 v0.2",
       "severity": "P2",
       "notes": "相邻区域壁厚梯度超过允许变化率",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.ratio > params.max_gradient_ratio",
+            "measured": "meas.ratio * 100",
+            "threshold": "params.max_gradient_ratio * 100",
+            "note": "相邻壁厚变化率超限"
+          }
+        ]
+      },
+      "unit": "%",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-10.md（相邻壁厚变化率的项目基线）"
     },
     {
       "rule_id": "R-DFM-11",
@@ -214,11 +376,30 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 加强筋经验基线 v0.2；待甲方筋位设计规范确认",
       "severity": "P2",
       "notes": "筋根厚/名义壁厚 ≤ 0.5~0.6；筋高/根厚 ≤ 3~5",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.root_ratio > params.max_rib_root_to_wall_ratio",
+            "measured": "meas.root_ratio",
+            "threshold": "params.max_rib_root_to_wall_ratio",
+            "note": "筋根厚/壁厚超限"
+          },
+          {
+            "when": "meas.height_ratio > params.max_rib_height_to_root_ratio",
+            "measured": "meas.height_ratio",
+            "threshold": "params.max_rib_height_to_root_ratio",
+            "note": "筋高/根厚超限"
+          }
+        ]
+      },
+      "unit": "比值",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-11.md（加强筋基础设计的项目基线）"
     },
     {
       "rule_id": "R-DFM-12",
@@ -243,11 +424,24 @@
         "boss_cap_end_tolerance_mm": 0.5,
         "boss_cap_end_tolerance_ratio": 0.08
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目模具钢净厚经验基线 v0.2；待模具供应商复核",
       "severity": "P2",
       "notes": "筋与筋、凸台与凸台之间模具钢厚度 ≥ 阈值",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.steel_mm < params.min_mold_steel_thickness_mm",
+            "measured": "meas.steel_mm",
+            "threshold": "params.min_mold_steel_thickness_mm",
+            "note": "相邻特征间模具钢净厚不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-12.md（模具钢净厚的项目基线）"
     },
     {
       "rule_id": "R-DFM-13",
@@ -262,13 +456,26 @@
           1
         ],
         "min_draft_angle_deg": 0.5,
-        "angle_tolerance_deg": 1e-6
+        "angle_tolerance_deg": 1e-06
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 拔模经验基线 v0.2；开模方向须由工艺确认",
       "severity": "P1",
       "notes": "面法向与开模方向夹角 < 最小拔模角（0.5°~1°）",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.angle_deg < params.min_draft_angle_deg - params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "params.min_draft_angle_deg",
+            "note": "拔模角不足（含容差）"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumDraftAngle.html（cavity 2°/core 1°）与 TOOLING_BASE\\dfa\\mw_check_draft_angle.dfa（draft_angle 3.0、cross_angle 5.0）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-13.md"
     },
     {
       "rule_id": "R-DFM-14",
@@ -279,11 +486,29 @@
       "params": {
         "min_undercut_depth_mm": 0.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "倒扣几何以 NX 特征分析/工艺确认为准",
       "severity": "P2",
       "notes": "沿开模方向存在遮挡（面在投影方向互相覆盖）",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.has_depth == 1 and meas.depth_mm >= params.min_undercut_depth_mm",
+            "measured": "meas.depth_mm",
+            "threshold": "params.min_undercut_depth_mm",
+            "note": "达到深度门槛的倒扣需模具动作"
+          },
+          {
+            "when": "meas.has_depth == 0",
+            "threshold": "params.min_undercut_depth_mm",
+            "note": "缺深度记录的倒扣，按存在即报"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_UndercutDetection.html 与 TOOLING_BASE\\dfa\\mw_check_undercut_area.dfa；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-14.md"
     },
     {
       "rule_id": "R-DFM-15",
@@ -315,11 +540,24 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 凸台经验基线 v0.2；待甲方结构设计规范确认",
       "severity": "P2",
       "notes": "凸台根部 R/壁厚、顶部厚度、凸台与侧壁距离",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.worst_measured < meas.worst_threshold",
+            "measured": "meas.worst_measured",
+            "threshold": "meas.worst_threshold",
+            "note": "凸台最不利尺寸低于要求"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-15.md（凸台壁厚/顶厚/根部圆角/侧壁距的项目基线）"
     },
     {
       "rule_id": "R-DFM-16",
@@ -335,11 +573,30 @@
         "min_projected_overlap_ratio": 0.15,
         "opposing_normal_cos": -0.9
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 圆角经验基线 v0.2（内 R≥0.25t，外 R≥0.5t）",
       "severity": "P2",
       "notes": "内角缺 R 或 R<0.25t；外角 R<0.5t",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.has_radius == 1 and meas.radius_mm < if(meas.is_outer == 1, params.outer_radius_ratio, params.inner_radius_ratio) * meas.nominal_wall_mm",
+            "measured": "meas.radius_mm",
+            "threshold": "if(meas.is_outer == 1, params.outer_radius_ratio, params.inner_radius_ratio) * meas.nominal_wall_mm",
+            "note": "内/外圆角小于壁厚倍率要求"
+          },
+          {
+            "when": "meas.has_radius == 0",
+            "measured": "0",
+            "threshold": "if(meas.is_outer == 1, params.outer_radius_ratio, params.inner_radius_ratio) * meas.nominal_wall_mm",
+            "note": "角上缺少圆角"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardCornerRadius.html（标准半径系列，口径参考）；内/外圆角倍率为项目基线；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-16.md"
     },
     {
       "rule_id": "R-DFM-17",
@@ -350,11 +607,24 @@
       "params": {
         "direction_cluster_angle_deg": 15.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "抽芯方向来自倒扣特征分析，按 15°夹角聚类",
       "severity": "P2",
       "notes": "统计倒扣方向聚类，>1 个主方向则判定需多抽芯",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.direction_count > 1",
+            "measured": "meas.direction_count",
+            "threshold": "1",
+            "note": "倒扣需要多个独立抽芯方向"
+          }
+        ]
+      },
+      "unit": "方向",
+      "rounding": 0,
+      "reference": "Check-Mate 无对应检查器（DFM Advisor 未提供该项）；公式为本项目注塑工艺基线，待甲方确认；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-17.md（抽芯方向聚类统计的项目基线；方向聚类见 dfms_UndercutDetection 的 draft_dirs 概念）"
     },
     {
       "rule_id": "R-DFM-18",
@@ -364,14 +634,27 @@
       "enabled": true,
       "params": {
         "sharp_angle_deg": 60.0,
-        "angle_tolerance_deg": 1e-6,
+        "angle_tolerance_deg": 1e-06,
         "exempt_edge_ids": []
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "项目 DFM 尖角经验基线 v0.2；设计意图边可配置豁免",
       "severity": "P2",
       "notes": "相邻面二面角 < 阈值（如 60°）且非设计意图",
-      "owner": "注塑"
+      "owner": "注塑",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.angle_deg < params.sharp_angle_deg - params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "params.sharp_angle_deg",
+            "note": "二面角过小形成尖角"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\pdq\\mqc_pdq_sharp_edge_angle.dfa（angle_tolerance 默认 0.5°）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-18.md"
     },
     {
       "rule_id": "R-DFM-19",
@@ -383,11 +666,24 @@
         "min_bend_radius_ratio": 0.5,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "内 R/料厚 t < 材料下限（冷轧钢 0.5~1.0）",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.radius < params.min_bend_radius_ratio * meas.thickness - 1e-9",
+            "measured": "meas.radius",
+            "threshold": "params.min_bend_radius_ratio * meas.thickness",
+            "note": "折弯内半径小于 R/t 下限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_bending_break_radius.dfa（standard_multiple_factor 0.1、deviation 1.1，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-19.md"
     },
     {
       "rule_id": "R-DFM-20",
@@ -399,11 +695,24 @@
         "min_edge_distance_ratio": 1.5,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "孔边到板边距离 < 1.5t~2t",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.gap < params.min_edge_distance_ratio * meas.thickness - 1e-9",
+            "measured": "meas.gap",
+            "threshold": "params.min_edge_distance_ratio * meas.thickness",
+            "note": "孔边到板边净距不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToPartEdge.html（dist_thickness_ratio_min 默认 3）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-20.md"
     },
     {
       "rule_id": "R-DFM-21",
@@ -415,11 +724,24 @@
         "min_hole_spacing_ratio": 2.0,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "相邻孔净距 < 2t",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.clear < params.min_hole_spacing_ratio * meas.thickness - 1e-9",
+            "measured": "meas.clear",
+            "threshold": "params.min_hole_spacing_ratio * meas.thickness",
+            "note": "孔间净距不足"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleSpacing.html（dist_thickness_ratio_min 默认 3）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-21.md"
     },
     {
       "rule_id": "R-DFM-22",
@@ -431,11 +753,24 @@
         "min_hole_diameter_ratio": 1.0,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "冲孔直径 < 料厚",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.diameter < params.min_hole_diameter_ratio * meas.thickness - 1e-9",
+            "measured": "meas.diameter",
+            "threshold": "params.min_hole_diameter_ratio * meas.thickness",
+            "note": "孔径小于 t 的倍数下限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html（diam_thickness_ratio_min 默认 1）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-22.md"
     },
     {
       "rule_id": "R-DFM-23",
@@ -447,11 +782,24 @@
         "min_slot_width_ratio": 1.2,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "槽宽 < 1.2t",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.width < params.min_slot_width_ratio * meas.thickness - 1e-9",
+            "measured": "meas.width",
+            "threshold": "params.min_slot_width_ratio * meas.thickness",
+            "note": "槽宽小于 t 的倍数下限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumHoleDiameter.html 与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_size.dfa（截口最小尺寸）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-23.md"
     },
     {
       "rule_id": "R-DFM-24",
@@ -464,11 +812,24 @@
         "bend_radius_override_mm": null,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "切口/孔到折弯线距离 < 3t + R",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.clear < params.bend_clearance_ratio * meas.thickness + meas.radius - 1e-9",
+            "measured": "meas.clear",
+            "threshold": "params.bend_clearance_ratio * meas.thickness + meas.radius",
+            "note": "孔边到折弯净距小于 3t+R"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_PunchedHoleToBend.html（dist_thickness_ratio_min 默认 3）与 DESIGN_TOOLS\\checkmate\\dfa\\checker\\sheet_metal\\mqc_dfm_check_cutout_bending_distance.dfa；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-24.md"
     },
     {
       "rule_id": "R-DFM-25",
@@ -481,11 +842,24 @@
         "bend_radius_override_mm": null,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "翻边高 < 3t + R（否则边缘撕裂）",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.height < params.min_flange_height_ratio * meas.thickness + meas.radius - 1e-9",
+            "measured": "meas.height",
+            "threshold": "params.min_flange_height_ratio * meas.thickness + meas.radius",
+            "note": "翻边高度小于 3t+R"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_MinimumFlangeHeight.html（height_min 3 mm、height_thickness_ratio_min 3）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-25.md"
     },
     {
       "rule_id": "R-DFM-26",
@@ -498,11 +872,30 @@
         "max_boss_height_ratio": 1.5,
         "sheet_thickness_mm": null
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "",
       "severity": "P2",
       "notes": "凸台高/t 超出允许区间",
-      "owner": "钣金"
+      "owner": "钣金",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.height < params.min_boss_height_ratio * meas.thickness - 1e-9",
+            "measured": "meas.height",
+            "threshold": "params.min_boss_height_ratio * meas.thickness",
+            "note": "凸台高度低于 h/t 下限"
+          },
+          {
+            "when": "meas.height > params.max_boss_height_ratio * meas.thickness + 1e-9",
+            "measured": "meas.height",
+            "threshold": "params.max_boss_height_ratio * meas.thickness",
+            "note": "凸台高度高于 h/t 上限"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 3,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EmbossmentMaximumDepth.html（height_thickness_ratio_max 默认 5，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-26.md"
     },
     {
       "rule_id": "R-DFM-27",
@@ -516,11 +909,32 @@
         "min_hole_diameter_mm": 0.5,
         "max_hole_diameter_mm": 50.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：标准麻花钻经济深径比 ≤ 4；> 10 需深孔钻工艺",
       "severity": "P2",
       "notes": "孔深/孔径 > 4 报警示，> 10 升 P1；孔深取同轴孔组沿轴总跨度",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.ratio > params.very_deep_hole_ratio",
+            "severity": "P1",
+            "measured": "meas.ratio",
+            "threshold": "params.very_deep_hole_ratio",
+            "note": "超深孔：深径比超出深孔钻工艺范围"
+          },
+          {
+            "when": "meas.ratio > params.deep_hole_ratio",
+            "severity": "P2",
+            "measured": "meas.ratio",
+            "threshold": "params.deep_hole_ratio",
+            "note": "深孔：深径比超出标准麻花钻范围"
+          }
+        ]
+      },
+      "unit": "比值",
+      "rounding": 2,
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepHoles.html（L/D > ld_ratio_max，默认 5）与 NXCheckers.json#dfms_DeepHoles；取证与差异见 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-27.md"
     },
     {
       "rule_id": "R-DFM-28",
@@ -531,11 +945,25 @@
       "params": {
         "deep_slot_ratio": 3.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：槽深/槽宽 > 3~4 时排屑与刀具刚性急剧恶化",
       "severity": "P2",
       "notes": "粗筛版用对置内壁 + 共同槽底识别直槽，槽深取槽壁沿槽底法向的跨度",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.ratio > params.deep_slot_ratio",
+            "severity": "P2",
+            "measured": "meas.ratio",
+            "threshold": "params.deep_slot_ratio",
+            "note": "深窄槽：深宽比超出标准立铣刀可达范围"
+          }
+        ]
+      },
+      "unit": "比值",
+      "rounding": 2,
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_SlotsDeepAndNarrow.html（D/W > depth_width_ratio_max，默认 4）与 NXCheckers.json#dfms_SlotsDeepAndNarrow；取证与差异见 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-28.md"
     },
     {
       "rule_id": "R-DFM-29",
@@ -544,11 +972,23 @@
       "name": "平底盲孔",
       "enabled": true,
       "params": {},
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：钻尖底（约 118°）利于排屑，平底需立铣刀清底，增加工序",
       "severity": "P3",
       "notes": "孔组底部端面为平面判为平底盲孔；圆锥底面（钻尖）不报",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.flat_bottom_count > 0",
+            "measured": "meas.depth",
+            "note": "盲孔底部为平面（无钻尖角）"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_FlatBottomHoles.html（盲孔平底即失败）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-29.md"
     },
     {
       "rule_id": "R-DFM-30",
@@ -560,11 +1000,23 @@
         "tool_clearance_mm": 2.0,
         "envelope_length_mm": 40.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "二期项；占位粗筛：其他零件包围盒与刀具包络圆柱相交即疑似遮挡",
       "severity": "P2",
       "notes": "粗筛置信度低，真实可达性需扫掠实体求交（二期）",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.blocker_count > 0",
+            "measured": "meas.envelope_radius",
+            "note": "刀具包络与其他零件包围盒相交"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconvenientToolAccess.html（按铣削方向可见性判可达）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-30.md"
     },
     {
       "rule_id": "R-DFM-31",
@@ -602,11 +1054,24 @@
         "max_hole_diameter_mm": 20.0,
         "min_hole_diameter_mm": 0.5
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "tool_library.json 钻头系列；甲方厂内刀具库到位后整表替换",
       "severity": "P2",
       "notes": "孔径/槽宽落在标准刀具系列（Φ1/2/3/4/5/6/8/10/12…）内；内置参考实现交付；孔径比对钻头系列，可用规则参数 standard_diameters 覆盖；槽宽比对立铣刀系列的扩展在平台合并时启用",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "abs(meas.diameter - nearest(meas.standard_diameters, meas.diameter)) > params.tolerance_mm",
+            "measured": "meas.diameter",
+            "threshold": "nearest(meas.standard_diameters, meas.diameter)",
+            "note": "孔径不在标准刀具系列内"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_StandardHoleSizes.html（std_diameters 默认 0.75/1.6/2.5/3.3/4.2）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-31.md"
     },
     {
       "rule_id": "R-DFM-32",
@@ -619,11 +1084,24 @@
         "cluster_tolerance_mm": 0.1,
         "min_radius_mm": 0.2
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：圆角种类 > 3 显著增加换刀次数",
       "severity": "P2",
       "notes": "底面圆角半径种类数 > N（换刀次数过多）；按零件统计回转圆角面半径聚类数",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.distinct_count > params.max_distinct_radii",
+            "measured": "meas.distinct_count",
+            "threshold": "params.max_distinct_radii",
+            "note": "回转圆角半径种类数超上限"
+          }
+        ]
+      },
+      "unit": "种",
+      "rounding": 0,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InconsistentBottomRadius.html（底部圆角半径不一致即失败）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-32.md"
     },
     {
       "rule_id": "R-DFM-33",
@@ -640,11 +1118,41 @@
           1.0
         ]
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：顶边圆角不小于标准刀具最小刀尖圆角（tool_library min_tool_radius_mm）",
       "severity": "P2",
       "notes": "粗筛版以最大平面为基准面，顶区（沿基准法向上 25%）的锐边/小圆角为候选",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.sharp_edge_count > 0",
+            "severity": "P2",
+            "measured": "0",
+            "threshold": "params.min_top_fillet_mm",
+            "unit": "mm",
+            "note": "顶区锐边：两平面直接相交，无圆角"
+          },
+          {
+            "when": "meas.radius < params.min_top_fillet_mm",
+            "severity": "P2",
+            "measured": "meas.radius",
+            "threshold": "params.min_top_fillet_mm",
+            "unit": "mm",
+            "note": "顶边圆角半径小于标准刀具最小刀尖圆角"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "exceptions": [
+        {
+          "when": "meas.exempt_edge == 1",
+          "skip": true,
+          "note": "装配贴合面等允许保留锐边的零件（模型 meta.sharp_edge_exempt_parts）"
+        }
+      ],
+      "reference": "NX Check-Mate：DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_TopFillets.html 与 dfms_StandardCornerRadius.html（口径差异：NX 判'入口面带圆角'为失败，本项目判'缺圆角/圆角过小'）；差异清单见 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-33.md"
     },
     {
       "rule_id": "R-DFM-34",
@@ -656,11 +1164,32 @@
         "angle_tolerance_deg": 5.0,
         "size_tolerance_mm": 0.1
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "tool_library.json 标准倒角角度/尺寸系列",
       "severity": "P2",
       "notes": "粗筛版以「与两个互垂平面相邻、法向约 45° 的小平面」识别倒角",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "abs(meas.angle_deg - nearest(meas.standard_angles_deg, meas.angle_deg)) > params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "nearest(meas.standard_angles_deg, meas.angle_deg)",
+            "unit": "deg",
+            "rounding": 1,
+            "note": "倒角角度不在标准系列"
+          },
+          {
+            "when": "meas.size_mm > 0 and abs(meas.size_mm - nearest(meas.standard_sizes_mm, meas.size_mm)) > params.size_tolerance_mm",
+            "measured": "meas.size_mm",
+            "threshold": "nearest(meas.standard_sizes_mm, meas.size_mm)",
+            "unit": "mm",
+            "rounding": 2,
+            "note": "倒角尺寸不在标准系列"
+          }
+        ]
+      },
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_InternalChamfers.html（型腔底部内倒角即失败，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-34.md"
     },
     {
       "rule_id": "R-DFM-35",
@@ -671,11 +1200,24 @@
       "params": {
         "min_corner_radius_mm": 0.5
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "二期项；粗筛：互垂内壁间圆角半径 < 标准刀具最小刀尖圆角即报",
       "severity": "P2",
       "notes": "未评估型腔深度（深腔才够不上刀具），真实判定需结合腔深（二期）",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.radius < params.min_corner_radius_mm",
+            "measured": "meas.radius",
+            "threshold": "params.min_corner_radius_mm",
+            "note": "内部转角圆角小于最小刀尖圆角"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_DeepRadiusCorners.html（L/R > lr_ratio_max 默认 10，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-35.md"
     },
     {
       "rule_id": "R-DFM-36",
@@ -687,11 +1229,24 @@
         "angle_tolerance_deg": 1.0,
         "min_face_area_mm2": 1.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "tool_library.json 标准平面角系列（0/30/45/60/90）",
       "severity": "P2",
       "notes": "以最大平面为基准，其余平面与基准夹角非标准即报；已识别为倒角的小面除外",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "abs(meas.angle_deg - nearest(meas.standard_angles_deg, meas.angle_deg)) > params.angle_tolerance_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "nearest(meas.standard_angles_deg, meas.angle_deg)",
+            "note": "面与基准面夹角不在标准角度系列内"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 1,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_AngularMillingFaces.html（铣削轴与侧壁夹角，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-36.md"
     },
     {
       "rule_id": "R-DFM-37",
@@ -702,11 +1257,24 @@
       "params": {
         "min_channel_width_mm": 1.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "二期项；粗筛：槽/通道宽 < 最小刀具直径（tool_library min_tool_diameter_mm）即报",
       "severity": "P2",
       "notes": "复用槽识别结果，未做空间遮挡分析（二期）",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.width < params.min_channel_width_mm",
+            "measured": "meas.width",
+            "threshold": "params.min_channel_width_mm",
+            "note": "通道宽度小于最小刀具直径"
+          }
+        ]
+      },
+      "unit": "mm",
+      "rounding": 2,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_NarrowPassages.html（W < min_width_validation 默认 2.0）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-37.md"
     },
     {
       "rule_id": "R-DFM-38",
@@ -717,11 +1285,24 @@
       "params": {
         "max_entry_angle_deg": 5.0
       },
-      "version": "0.2",
+      "version": "0.3",
       "source_standard": "经验值：孔口面法向与孔轴夹角 > 5° 时钻头入刀易滑偏",
       "severity": "P2",
       "notes": "孔口面取孔组端部非内部端面；曲面孔口（无法向）暂不判定",
-      "owner": "机加工"
+      "owner": "机加工",
+      "expression": {
+        "cases": [
+          {
+            "when": "meas.angle_deg > params.max_entry_angle_deg",
+            "measured": "meas.angle_deg",
+            "threshold": "params.max_entry_angle_deg",
+            "note": "孔口面与孔轴夹角过大"
+          }
+        ]
+      },
+      "unit": "deg",
+      "rounding": 1,
+      "reference": "DESIGN_TOOLS\\checkmate\\dfmadvisor\\localization\\dfms_EntryExitSurfaceForHoles.html（入/出刀边非圆弧即失败，口径差异见证据）；证据 docs/branches/feat-nx-checkmate-cae-rule-replication/checkmate_evidence/DFM-38.md"
     },
     {
       "rule_id": "R-SAF-01",
@@ -805,6 +1386,12 @@
       "params": {
         "current_a": 16.0,
         "ambient_temp_c": 25.0,
+        "emissivity": 0.25,
+        "contact_resistance_ohm_mm2": 0.00015,
+        "reference_temp_c": 20.0,
+        "max_solver_rise_c": 4000.0,
+        "max_temperature_c": 2000.0,
+        "solver_result_path": "",
         "interval_confidence": 0.8,
         "max_rise_c": 45.0,
         "convection_h_w_m2k": 15.0,
@@ -820,23 +1407,39 @@
         "h_w_m2k_max": 25.0,
         "materials": {
           "Cu": {
-            "rho_ohm_m": 1.724e-08
+            "rho_ohm_m": 1.724e-08,
+            "temp_coeff_per_c": 0.00393
           },
           "CuSn6": {
-            "rho_ohm_m": 1.3e-07
+            "rho_ohm_m": 1.3e-07,
+            "temp_coeff_per_c": 0.0006
           },
           "CuZn37": {
-            "rho_ohm_m": 6.2e-08
+            "rho_ohm_m": 6.2e-08,
+            "temp_coeff_per_c": 0.0015
           },
           "CuBe2": {
-            "rho_ohm_m": 7.8e-08
+            "rho_ohm_m": 7.8e-08,
+            "temp_coeff_per_c": 0.001
           }
         }
       },
-      "version": "0.1",
-      "source_standard": "集总对流模型初值；电阻率与允许温升可在本条 params 中改",
+      "version": "2.0",
+      "unit": "degC",
+      "rounding": 2,
+      "exceptions": [
+        {
+          "when": "缺少材料、导体圆柱面或求解输入",
+          "skip": true,
+          "enforced_by": "checker",
+          "note": "由 PERF-01 检查器在条件不满足时跳过，不猜结果"
+        }
+      ],
+      "reference": "rules/perf_formula_v2.json#PERF-01；docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json",
+      "formula_ref": "PERF-01",
+      "source_standard": "NX Check-Mate 条件比较 + NX Thermal Flow/TMG 稳态热网络；接触电阻为本地标定项",
       "severity": "P2",
-      "notes": "由几何/材料/工况特征预测稳态温升与允许载流，输出区间。允许温升见 max_rise_c",
+      "notes": "公式直接计算稳态温度；NX 条件式负责温升和绝对温度判定。标定区间只表达不确定性，不决定 PASS/FAIL",
       "owner": "性能预测"
     },
     {
@@ -863,6 +1466,8 @@
         "interval_confidence": 0.8,
         "insertion_force_max_n": 20.0,
         "withdrawal_force_min_n": 1.0,
+        "geometry_source": "contact_metadata",
+        "solver_result_path": "",
         "materials": {
           "CuSn6": {
             "e_gpa": 110.0
@@ -875,10 +1480,28 @@
           }
         }
       },
-      "version": "0.1",
-      "source_standard": "悬臂梁 + 摩擦模型初值；弹性模量、过盈量、摩擦系数可在本条 params 中改",
+      "version": "2.0",
+      "unit": "N",
+      "rounding": 2,
+      "exceptions": [
+        {
+          "when": "接触簧片元数据缺失或无效",
+          "skip": true,
+          "enforced_by": "checker",
+          "note": "由 PERF-02 检查器跳过"
+        },
+        {
+          "when": "摩擦锥自锁：1 - friction_coeff * tan(lead_angle) <= 0",
+          "skip": true,
+          "enforced_by": "checker",
+          "note": "插入力公式分母非正，属物理边界，由检查器跳过"
+        }
+      ],
+      "reference": "rules/perf_formula_v2.json#PERF-02；docs/branches/feat-nx-checkmate-cae-rule-replication/NX_PERF_RULE_EVIDENCE.md；rules/nx_rule_evidence_v1.json；rules/perf_cae_cases.json#PERF-02",
+      "formula_ref": "PERF-02",
+      "source_standard": "NX Nastran 摩擦/罚函数接触工况 + 欧拉-伯努利悬臂梁与库仑摩擦降阶公式",
       "severity": "P2",
-      "notes": "由接触簧片几何/材料/过盈量预测插入力、拔出力。标签为悬臂梁摩擦公式。",
+      "notes": "由明确接触特征元数据计算插入力和拔出力；达到边界值即判失败，不使用包围盒猜测几何",
       "owner": "性能预测"
     }
   ]

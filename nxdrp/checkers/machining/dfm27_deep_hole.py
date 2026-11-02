@@ -13,6 +13,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -39,6 +40,82 @@ class DeepHoleChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：比较/severity 在规则库的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        """几何测量留在这里，深径比的两级比较由 R-DFM-27 的 cases 决定。"""
+        deep_ratio = positive_number(ctx.param("deep_hole_ratio")) or 4.0
+        very_deep_ratio = positive_number(ctx.param("very_deep_hole_ratio")) or 10.0
+        dmin = positive_number(ctx.param("min_hole_diameter_mm")) or 0.5
+        dmax = positive_number(ctx.param("max_hole_diameter_mm")) or 50.0
+
+        findings = []
+        for hole in extract_holes(ctx.model):
+            if hole.is_boss:
+                continue
+            worst = None
+            for face_id, radius, span in hole.segments:
+                diameter = 2.0 * radius
+                if diameter < dmin or diameter > dmax or span <= 0:
+                    continue
+                ratio = span / diameter
+                if worst is None or ratio > worst[0]:
+                    worst = (ratio, span, diameter, face_id)
+            if worst is None:
+                continue
+            ratio, span, diameter, worst_face = worst
+            try:
+                verdicts = ctx.evaluate(
+                    {"ratio": ratio, "span": span, "diameter": diameter}
+                )
+            except ExprMissingSymbol:
+                continue  # 该特征缺测量量 → 跳过，不猜
+            for verdict in verdicts:
+                very_deep = verdict.severity == "P1"
+                faces = "、".join(hole.face_ids)
+                target_d = span / deep_ratio
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=hole.part_id,
+                        face_ids=hole.face_ids,
+                        message=(
+                            f"【粗筛】零件 {hole.part_id} 孔组（面 {faces}）深径比 {verdict.measured:.2f} "
+                            f"> {float(verdict.threshold):.0f}（超深孔，窄段 {worst_face}："
+                            f"深 {span:.2f} mm / Ø{diameter:.2f}）" if very_deep else
+                            f"【粗筛】零件 {hole.part_id} 孔组（面 {faces}）深径比 {verdict.measured:.2f} "
+                            f"> {float(verdict.threshold):.2f}（窄段 {worst_face}：深 {span:.2f} mm / Ø{diameter:.2f}）"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit,
+                        suggestion=(
+                            f"需采用深孔钻工艺（枪钻/BTA），并确认排屑与冷却方案；"
+                            f"若结构允许，将孔径加大到 Ø{target_d:.1f} 以上或从两面钻孔，"
+                            f"使深径比降到 {deep_ratio:.0f} 以内。" if very_deep else
+                            f"优先从两面钻孔或做阶梯孔，将单侧深径比降到 {deep_ratio:.0f} 以内；"
+                            f"若必须单侧钻，将孔径加大到 Ø{target_d:.1f} 以上，或与工艺确认断屑方案。"
+                        ),
+                        feature_kind="hole",
+                        confidence=hole.confidence,
+                        location=hole.center,
+                        extra={
+                            "depth_mm": round(span, 4),
+                            "diameter_mm": round(diameter, 4),
+                            "total_depth_mm": round(hole.depth, 4),
+                            "worst_face_id": worst_face,
+                            "very_deep": very_deep,
+                        },
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         deep_ratio = positive_number(ctx.param("deep_hole_ratio")) or 4.0
         very_deep_ratio = positive_number(ctx.param("very_deep_hole_ratio")) or 10.0
         dmin = positive_number(ctx.param("min_hole_diameter_mm")) or 0.5

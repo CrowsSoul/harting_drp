@@ -12,6 +12,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -35,6 +36,58 @@ class DeepNarrowSlotChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：深宽比比较在 R-DFM-28 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        limit = positive_number(ctx.param("deep_slot_ratio")) or 3.0
+        findings = []
+        for slot in extract_slots(ctx.model):
+            if slot.depth <= 0 or slot.width <= 0:
+                continue
+            ratio = slot.depth / slot.width
+            try:
+                verdicts = ctx.evaluate(
+                    {"ratio": ratio, "depth": slot.depth, "width": slot.width}
+                )
+            except ExprMissingSymbol:
+                continue
+            target_w = slot.depth / limit
+            for verdict in verdicts:
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=slot.part_id,
+                        face_ids=slot.face_ids,
+                        message=(
+                            f"【粗筛】零件 {slot.part_id} 槽（面 {'、'.join(slot.face_ids)}）"
+                            f"深宽比 {verdict.measured:.2f} > {float(verdict.threshold):.2f}"
+                            f"（槽深 {slot.depth:.2f} mm / 槽宽 {slot.width:.2f} mm）"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit,
+                        suggestion=(
+                            f"优先将槽宽加大到 {target_w:.2f} mm 以上，或将槽深降到 "
+                            f"{limit * slot.width:.2f} mm 以内；结构受限时改用分层铣削、"
+                            f"插铣或电火花加工，并与工艺确认刀具悬伸。"
+                        ),
+                        feature_kind="slot",
+                        confidence=slot.confidence,
+                        location=slot.location,
+                        extra={
+                            "depth_mm": round(slot.depth, 4),
+                            "width_mm": round(slot.width, 4),
+                        },
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         limit = positive_number(ctx.param("deep_slot_ratio")) or 3.0
 
         findings = []

@@ -93,6 +93,13 @@ export interface Rule {
   severity: string
   notes: string
   owner: string
+  expression: Record<string, unknown>
+  unit: string
+  rounding: number | null
+  exceptions: (Record<string, unknown>)[]
+  reference: string
+  formula_ref: string
+  formula: Record<string, unknown>
 }
 
 export interface RuleBook {

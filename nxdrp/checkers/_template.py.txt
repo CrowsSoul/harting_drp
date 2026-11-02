@@ -43,6 +43,21 @@ class MyChecker(BaseChecker):
         return True, ""
 
     # ---------- 3. 算法本体 ----------
+    #
+    # 规则模型 v2（迁移期双路径）：几何测量留在 Python，比较/阈值/severity 移进
+    # 规则库的 expression。带 expression 的规则走新路径，没有的走旧路径：
+    #
+    #     from nxdrp.expr import ExprMissingSymbol
+    #     if ctx.rule.has_expression:
+    #         try:
+    #             for verdict in ctx.evaluate({"radius": radius}):  # 缺测量量会抛
+    #                 ...  # verdict.severity / measured / threshold / unit
+    #         except ExprMissingSymbol:
+    #             continue          # 该特征缺数据 → 跳过，不猜
+    #     else:
+    #         ...旧判定原样...
+    #
+    # 规则库侧写法见 rules/dfm_default.json 的 R-DFM-27/28/33 与 nxdrp/expr/。
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
         threshold = float(ctx.param("min_top_fillet_mm", 0.5))
 

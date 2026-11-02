@@ -12,6 +12,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 from nxdrp.geom import dist, dot
 
 from ._sheet_metal_dfm_common import (
@@ -39,6 +40,68 @@ class HoleSpacingChecker(SheetMetalChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：孔间净距判定在 R-DFM-21 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        feats = self.features(ctx.model, ctx.params)
+        by_part: dict[str, list] = {}
+        for hole in feats.holes:
+            by_part.setdefault(hole.part_id, []).append(hole)
+        findings = []
+        for part_id, holes in by_part.items():
+            thickness = self.thickness(feats, part_id)
+            if thickness is None:
+                continue
+            for a, b in combinations(holes, 2):
+                if abs(dot(a.axis, b.axis)) < PARALLEL_DOT:
+                    continue
+                center_distance = dist(a.center, b.center)
+                clear = center_distance - a.r_max - b.r_max
+                try:
+                    verdicts = ctx.evaluate({"clear": clear, "thickness": thickness.value})
+                except ExprMissingSymbol:
+                    continue
+                faces_a = "、".join(a.face_ids)
+                faces_b = "、".join(b.face_ids)
+                location = (
+                    (a.center[0] + b.center[0]) / 2.0,
+                    (a.center[1] + b.center[1]) / 2.0,
+                    (a.center[2] + b.center[2]) / 2.0,
+                )
+                for verdict in verdicts:
+                    limit = float(verdict.threshold)
+                    findings.append(
+                        emit_finding(
+                            ctx,
+                            severity=verdict.severity,
+                            part_id=part_id,
+                            face_ids=list(a.face_ids) + list(b.face_ids),
+                            message=(
+                                f"【粗筛】零件 {part_id} 孔组（面 {faces_a}）与孔组"
+                                f"（面 {faces_b}）净距 {float(verdict.measured):.3f} mm < "
+                                f"{limit / thickness.value:.2f}×t={limit:.3f} mm"
+                                f"（{thickness_text(thickness)}）"
+                            ),
+                            measured=verdict.measured,
+                            threshold=verdict.threshold,
+                            unit=verdict.unit or "mm",
+                            suggestion=(
+                                f"将两孔中心距增大到至少 "
+                                f"{limit + a.r_max + b.r_max:.2f} mm，或减小其中一孔孔径。"
+                            ),
+                            thickness=thickness,
+                            feature_kind="hole",
+                            feature_confidence=min(a.confidence, b.confidence),
+                            location=location,
+                        )
+                    )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         ratio = positive_number(ctx.param("min_hole_spacing_ratio")) or 2.0
         feats = self.features(ctx.model, ctx.params)
         by_part: dict[str, list] = {}

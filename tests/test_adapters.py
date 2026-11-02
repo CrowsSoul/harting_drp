@@ -81,7 +81,10 @@ class TestNxAdapter(unittest.TestCase):
         self.assertIn(adapter.name, ("nx-batch", "mock"))
 
 
-@unittest.skipUnless(detect_run_journal(), "本机没有 NX，跳过真实解析测试")
+@unittest.skipUnless(
+    os.environ.get("NXDRP_RUN_NX_TESTS") == "1" and detect_run_journal(),
+    "真实 NX 解析测试需显式设置 NXDRP_RUN_NX_TESTS=1",
+)
 class TestRealNx(unittest.TestCase):
     """只有装了 NX 的机器才会跑；耗时约 30 秒。"""
 

@@ -538,6 +538,40 @@
         },
         "owner": {
           "type": "string"
+        },
+        "expression": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "unit": {
+          "type": "string"
+        },
+        "rounding": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "reference": {
+          "type": "string"
+        },
+        "formula_ref": {
+          "type": "string"
+        },
+        "formula": {
+          "type": "object",
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -551,7 +585,14 @@
         "source_standard",
         "severity",
         "notes",
-        "owner"
+        "owner",
+        "expression",
+        "unit",
+        "rounding",
+        "exceptions",
+        "reference",
+        "formula_ref",
+        "formula"
       ]
     },
     "RuleBook": {

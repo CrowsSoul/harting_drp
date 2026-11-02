@@ -15,6 +15,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -43,6 +44,74 @@ class DeepRadiusCornerChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：最小半径判定在 R-DFM-35 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        rmin = positive_number(ctx.param("min_corner_radius_mm")) or 0.5
+        findings = []
+        for fillet, point in self._interior_corners(ctx):
+            try:
+                verdicts = ctx.evaluate({"radius": fillet.radius})
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=fillet.part_id,
+                        face_ids=fillet.face_ids,
+                        message=(
+                            f"【粗筛】零件 {fillet.part_id} 内部转角圆角 R{verdict.measured:.2f} "
+                            f"< 标准刀具最小刀尖圆角 {float(verdict.threshold):.2f} mm；"
+                            f"若为深腔转角，刀具无法到位，转角处会留料"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        suggestion=(
+                            f"将转角圆角加大到 R{rmin:.1f} 以上（与所用立铣刀刀尖圆角匹配，"
+                            f"并复核型腔深度对应的刀具直径）；若转角必须清根，"
+                            f"注明电火花或钳工修整工序。"
+                        ),
+                        feature_kind="corner_fillet",
+                        confidence=fillet.confidence,
+                        location=point,
+                        note=(
+                            "二期粗筛：只比对转角半径与最小刀尖圆角，未评估型腔深度；"
+                            "浅腔小转角可能被误报，需人工复核"
+                        ),
+                    )
+                )
+        return findings
+
+    def _interior_corners(self, ctx: CheckContext):
+        """几何层：内部、两侧平面互垂的圆角转角（新旧路径共用）。"""
+        adj = adjacency_map(ctx.model)
+        face_map = ctx.model.face_map()
+        for fillet in extract_fillets(ctx.model):
+            if not fillet.interior:
+                continue
+            parents = []
+            for fid in sorted(adj.get(fillet.face.face_id, ())):
+                candidate = face_map.get(fid)
+                n = face_normal(candidate) if candidate is not None else None
+                if n is not None:
+                    parents.append(n)
+            perpendicular = any(
+                abs(dot(a, b)) <= PERPENDICULAR_DOT
+                for i, a in enumerate(parents)
+                for b in parents[i + 1:]
+            )
+            if not perpendicular:
+                continue
+            yield fillet, face_point(fillet.face)
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         rmin = positive_number(ctx.param("min_corner_radius_mm")) or 0.5
         adj = adjacency_map(ctx.model)
         face_map = ctx.model.face_map()

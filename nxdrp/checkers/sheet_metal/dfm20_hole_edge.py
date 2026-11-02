@@ -11,6 +11,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._sheet_metal_dfm_common import (
     SheetMetalChecker,
@@ -37,6 +38,68 @@ class HoleEdgeDistanceChecker(SheetMetalChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：孔边到板边净距判定在 R-DFM-20 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        feats = self.features(ctx.model, ctx.params)
+        boxes = {part.part_id: part.bbox for part in ctx.model.parts}
+        findings = []
+        for hole in feats.holes:
+            thickness = self.thickness(feats, hole.part_id)
+            bbox = boxes.get(hole.part_id)
+            if thickness is None or bbox is None:
+                continue
+            axes = in_plane_axes(hole.axis)
+            lows = (bbox.xmin, bbox.ymin, bbox.zmin)
+            highs = (bbox.xmax, bbox.ymax, bbox.zmax)
+            edge = min(
+                min(hole.center[i] - lows[i], highs[i] - hole.center[i])
+                for i in axes
+            )
+            gap = edge - hole.r_max
+            try:
+                verdicts = ctx.evaluate({"gap": gap, "thickness": thickness.value})
+            except ExprMissingSymbol:
+                continue
+            faces = "、".join(hole.face_ids)
+            for verdict in verdicts:
+                limit = float(verdict.threshold)
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=hole.part_id,
+                        face_ids=hole.face_ids,
+                        message=(
+                            f"【粗筛】零件 {hole.part_id} 孔组（面 {faces}）孔边到板边净距 "
+                            f"{float(verdict.measured):.3f} mm < {limit / thickness.value:.2f}×t={limit:.3f} mm"
+                            f"（{thickness_text(thickness)}）"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        suggestion=(
+                            f"将孔中心向板内移动至少 {limit - gap:.2f} mm，"
+                            f"使孔边到板边净距达到 {limit:.2f} mm；"
+                            f"若空间受限，可改用翻边孔或局部加强。"
+                        ),
+                        thickness=thickness,
+                        feature_kind="hole",
+                        feature_confidence=hole.confidence,
+                        location=hole.center,
+                        note=(
+                            "钣金粗筛：用零件包围盒估计板边，按孔轴选两个全局坐标轴近似板面方向，"
+                            "异形板边或斜孔会有偏差，需人工复核"
+                        ),
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         ratio = positive_number(ctx.param("min_edge_distance_ratio")) or 1.5
         feats = self.features(ctx.model, ctx.params)
         boxes = {part.part_id: part.bbox for part in ctx.model.parts}

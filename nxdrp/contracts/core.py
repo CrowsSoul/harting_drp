@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from typing import Any, Iterable
 
@@ -361,7 +362,13 @@ class ModelBundle:
 # --------------------------------------------------------------------------
 @dataclass
 class Rule:
-    """一条检查规则。阈值全部是数据，不写在代码里（合同第 7 条要求）。"""
+    """一条检查规则。
+
+    ``params`` 保留给 V1 阈值插件兼容；V2 插件可把计算模型放在
+    ``formula_ref``/``formula``，把判定式、单位、舍入例外和出处放在
+    ``expression``、``unit``、``rounding``、``exceptions``、``reference``。
+    未使用的新字段不会改变旧规则的行为。
+    """
 
     rule_id: str
     check_item_id: str
@@ -374,9 +381,42 @@ class Rule:
     severity: str = "P2"
     notes: str = ""
     owner: str = ""
+    # ---- 规则模型 v2：Check-Mate 风格的"公式 + 比较规则"（全部带默认值，旧规则照常跑）----
+    #: 表达式判定配置，结构见 nxdrp/expr/cases.py；空 dict = 走旧 params 判定路径
+    expression: dict = field(default_factory=dict)
+    #: Finding.unit 的默认来源（case 内可覆盖）
+    unit: str = ""
+    #: 求值后回填 measured/threshold 的小数位；None = 各模块默认
+    rounding: int | None = None
+    #: 豁免子句：[{"when": "...", "skip": true} | {"when": "...", "severity_override": "P3"}]
+    exceptions: list[dict] = field(default_factory=list)
+    #: 判定口径出处（Check-Mate 规则路径/标准条款），复刻与审计用
+    reference: str = ""
+    #: PERF 等扩展规则使用的独立公式库引用；空 = 不使用公式库
+    formula_ref: str = ""
+    #: 规则的完整内联公式；为空时由 formula_ref 指向外部公式库
+    formula: dict = field(default_factory=dict)
+
+    @property
+    def has_expression(self) -> bool:
+        """是否带表达式判定。迁移期 checker 用它做新旧双路径开关。"""
+        return isinstance(self.expression, dict) and bool(self.expression.get("cases"))
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        # v2 字段为空时不写进 JSON：老规则的文件形态保持不变，diff 只显示真正用到的规则
+        for key in (
+            "expression",
+            "unit",
+            "rounding",
+            "exceptions",
+            "reference",
+            "formula_ref",
+            "formula",
+        ):
+            if data.get(key) in ({}, "", None, []):
+                data.pop(key, None)
+        return data
 
     @classmethod
     def from_dict(cls, d) -> "Rule":
@@ -439,6 +479,31 @@ class RuleBook:
         for r in self.rules:
             if r.severity not in SEVERITIES:
                 problems.append(f"{r.check_item_id}: severity={r.severity!r} 非法")
+            for index, entry in enumerate(r.exceptions):
+                # 统一契约：跳过后置条件用 skip=True；无 expression 的规则由 checker 执行，
+                # 必须标 enforced_by="checker"（PERF 等规则库即此形态）
+                if not isinstance(entry, dict):
+                    problems.append(f"{r.check_item_id}: exceptions[{index}] 必须是对象")
+                    continue
+                if "action" in entry:
+                    problems.append(
+                        f"{r.check_item_id}: exceptions[{index}] 使用了旧键 action，"
+                        "统一为 skip / severity_override"
+                    )
+                if "skip" in entry and not isinstance(entry["skip"], bool):
+                    problems.append(f"{r.check_item_id}: exceptions[{index}].skip 必须是布尔值")
+                if entry.get("skip") and not r.has_expression and entry.get("enforced_by") != "checker":
+                    problems.append(
+                        f"{r.check_item_id}: 无 expression 的规则，跳过后置条件需标 "
+                        "enforced_by=\"checker\""
+                    )
+            if r.expression:
+                # 延迟导入：契约层不依赖引擎的加载顺序，坏规则在加载时被挡在门外
+                from ..expr import validate_expression
+
+                problems.extend(
+                    f"{r.check_item_id}: {p}" for p in validate_expression(r)
+                )
         if problems:
             raise ContractError("RuleBook 校验失败", problems)
 
@@ -609,8 +674,8 @@ def _face_schema() -> dict:
 
 
 def schema_documents() -> dict[str, dict]:
-    """返回三份契约的 JSON Schema 文档。"""
-    return {
+    """返回核心契约及静态 PERF CAE 契约的 JSON Schema 文档。"""
+    documents = {
         "model_bundle.schema.json": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "$id": "https://harting.local/nxdrp/model_bundle.schema.json",
@@ -654,8 +719,15 @@ def schema_documents() -> dict[str, dict]:
                             "process_type": {"type": "string"},
                             "enabled": {"type": "boolean"},
                             "params": {"type": "object"},
+                            "formula_ref": {"type": "string"},
+                            "formula": {"type": "object"},
                             "source_standard": {"type": "string"},
                             "severity": {"enum": list(SEVERITIES)},
+                            "expression": {"type": "object"},
+                            "unit": {"type": "string"},
+                            "rounding": {"type": ["integer", "null"]},
+                            "exceptions": {"type": "array", "items": {"type": "object"}},
+                            "reference": {"type": "string"},
                         },
                     },
                 },
@@ -687,3 +759,13 @@ def schema_documents() -> dict[str, dict]:
             },
         },
     }
+    schema_dir = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", "..", "contracts", "schema",
+    ))
+    if os.path.isdir(schema_dir):
+        for filename in sorted(os.listdir(schema_dir)):
+            if not filename.startswith("perf_") or not filename.endswith(".schema.json"):
+                continue
+            with open(os.path.join(schema_dir, filename), "r", encoding="utf-8") as fh:
+                documents[filename] = json.load(fh)
+    return documents

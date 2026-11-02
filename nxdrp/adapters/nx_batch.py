@@ -144,11 +144,19 @@ class NxBatchAdapter(BaseModelSource):
         return path
 
     # ---------------- 通用 journal 执行 ----------------
-    def run_journal(self, journal: str, request: dict, timeout_s: float | None = None) -> dict:
+    def run_journal(
+        self,
+        journal: str,
+        request: dict,
+        timeout_s: float | None = None,
+        *,
+        response_path: str = "",
+    ) -> dict:
         """在 NX 进程内执行一个 journal，返回它写回的 JSON。
 
         任何扩展（例如 电气安规 需要的精确距离测量）都可以复用这一个方法：
         新增 ``nxdrp/journals/<name>.py``，然后 ``adapter.run_journal("<name>", {...})``。
+        ``response_path`` 供需要保留阶段响应的 CAE 编排器使用。
         """
         if not self.available():
             raise NxNotAvailableError(
@@ -162,7 +170,11 @@ class NxBatchAdapter(BaseModelSource):
 
         workdir = tempfile.mkdtemp(prefix="nxdrp_")
         req_path = os.path.join(workdir, "request.json")
-        resp_path = os.path.join(workdir, "response.json")
+        resp_path = os.path.abspath(response_path) if response_path else os.path.join(workdir, "response.json")
+        if response_path:
+            os.makedirs(os.path.dirname(resp_path), exist_ok=True)
+            if os.path.exists(resp_path):
+                os.remove(resp_path)
         with open(req_path, "w", encoding="utf-8") as fh:
             json.dump(request, fh, ensure_ascii=False)
 

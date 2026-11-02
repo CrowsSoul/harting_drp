@@ -7,6 +7,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ._rules import injection_default_params
 from ._common import nominal_wall_for_part, solid_parts, wall_samples
 
@@ -21,6 +22,88 @@ class UniformWallThicknessChecker(BaseChecker):
     default_params = injection_default_params("DFM-09")
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：面积占比判定在 R-DFM-09 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        low = float(ctx.param("uniform_ratio_low"))
+        high = float(ctx.param("uniform_ratio_high"))
+        min_samples = max(1, int(ctx.param("min_samples_for_uniformity")))
+        explicit = self._explicit_nominal(ctx)
+        samples = wall_samples(ctx)
+        findings: list[Finding] = []
+        for part in solid_parts(ctx):
+            candidates = [s for s in samples if s.part_id == part.part_id]
+            nominal = nominal_wall_for_part(ctx, part.part_id, candidates, explicit)
+            if nominal is None or nominal <= 0.0 or len(candidates) < min_samples:
+                continue
+            total_area = sum(max(s.area_mm2, 1e-6) for s in candidates)
+            bad = []
+            for sample in candidates:
+                ratio = sample.thickness_mm / nominal
+                if ratio < low or ratio > high:
+                    bad.append((sample, ratio))
+            if not bad:
+                continue
+            bad_area = sum(max(s.area_mm2, 1e-6) for s, _ in bad)
+            area_ratio = bad_area / total_area
+            try:
+                verdicts = ctx.evaluate({"area_ratio": area_ratio})
+            except ExprMissingSymbol:
+                continue
+            worst, worst_ratio = max(bad, key=lambda item: abs(item[1] - 1.0))
+            for verdict in verdicts:
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        part_refs=[part.part_id],
+                        location=worst.location,
+                        bbox=part.bbox,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "%",
+                        confidence=0.78 if worst.origin == "opposing_planar_faces" else 0.92,
+                        face_ids=[fid for s, _ in bad for fid in s.face_ids][:24],
+                        message=(
+                            f"{part.name or part.part_id} 有 {float(verdict.measured):.1f}% 的壁厚样本"
+                            f"超出名义壁厚 {nominal:.2f} mm 的 [{low:.2f}, {high:.2f}] 倍范围；"
+                            f"最不利位置为 {worst_ratio:.2f} 倍"
+                        ),
+                        suggestion_text=(
+                            f"将偏离区域的壁厚调整到 {nominal * low:.2f}–{nominal * high:.2f} mm，"
+                            f"并把厚度突变改为渐变或圆角过渡。"
+                        ),
+                        suggestion_delta={
+                            "nominal_wall_thickness_mm": round(nominal, 3),
+                            "ratio_low": low,
+                            "ratio_high": high,
+                        },
+                        note="按局部壁厚样本面积统计；名义壁厚取上游值或面积样本中位数",
+                        extra={
+                            "nominal_wall_thickness_mm": round(nominal, 3),
+                            "worst_ratio": round(worst_ratio, 4),
+                            "bad_sample_count": len(bad),
+                            "sample_count": len(candidates),
+                            "method": worst.origin,
+                        },
+                    )
+                )
+        return findings
+
+    @staticmethod
+    def _explicit_nominal(ctx: CheckContext) -> float | None:
+        explicit = ctx.param("nominal_wall_thickness_mm")
+        if explicit is None:
+            return None
+        try:
+            return float(explicit)
+        except (TypeError, ValueError):
+            return None
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         low = float(ctx.param("uniform_ratio_low"))
         high = float(ctx.param("uniform_ratio_high"))
         max_ratio = float(ctx.param("max_area_ratio"))

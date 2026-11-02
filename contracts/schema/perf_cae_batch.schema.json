@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harting.local/nxdrp/perf_cae_batch.schema.json",
+  "title": "PERF CAE Parameter Batch",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "batch_id",
+    "status",
+    "authorization",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "batch_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "status": {
+      "const": "ready_for_solver"
+    },
+    "solver_run_performed": {
+      "const": false
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "count_per_item": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "enum": ["PERF-01", "PERF-02"]
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "required": [
+        "required_for_calibration",
+        "accepted_license_modes"
+      ],
+      "properties": {
+        "required_for_calibration": {
+          "const": true
+        },
+        "accepted_license_modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "authorized",
+              "commercial",
+              "floating",
+              "node_locked",
+              "evaluation"
+            ]
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "required": [
+          "case_id",
+          "solver_case_id",
+          "check_item_id",
+          "formula_inputs",
+          "expected_values",
+          "expected_units",
+          "formula_decisions"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "solver_case_id": {
+            "type": "string"
+          },
+          "check_item_id": {
+            "enum": ["PERF-01", "PERF-02"]
+          },
+          "material": {
+            "type": "string"
+          },
+          "formula_inputs": {
+            "type": "object"
+          },
+          "geometry_request": {
+            "type": "object"
+          },
+          "boundary_conditions": {
+            "type": "object"
+          },
+          "contact_conditions": {
+            "type": "object"
+          },
+          "formula_outputs": {
+            "type": "object"
+          },
+          "expected_values": {
+            "type": "object"
+          },
+          "expected_units": {
+            "type": "object"
+          },
+          "formula_decisions": {
+            "type": "array"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

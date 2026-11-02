@@ -15,6 +15,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -45,6 +46,86 @@ class InternalChamferChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：角度/尺寸的标准系列判定在 R-DFM-34 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        angles = tool_values(ctx, "standard_chamfer_angles_deg", "standard_chamfer_angles_deg", FALLBACK_CHAMFER_ANGLES)
+        sizes = tool_values(ctx, "standard_chamfer_sizes_mm", "standard_chamfer_sizes_mm", FALLBACK_CHAMFER_SIZES)
+
+        findings = []
+        for chamfer in extract_chamfers(ctx.model):
+            point = face_point(chamfer.face)
+            try:
+                verdicts = ctx.evaluate(
+                    {
+                        "angle_deg": chamfer.angle_deg,
+                        "size_mm": chamfer.size_mm,
+                        "standard_angles_deg": angles,
+                        "standard_sizes_mm": sizes,
+                    }
+                )
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                target = float(verdict.threshold)
+                if verdict.case_index == 0:   # 角度不在标准系列
+                    findings.append(
+                        emit_finding(
+                            ctx,
+                            severity=verdict.severity,
+                            part_id=chamfer.part_id,
+                            face_ids=chamfer.face_ids,
+                            message=(
+                                f"【粗筛】零件 {chamfer.part_id} 倒角（面 {chamfer.face.face_id}）"
+                                f"角度 {verdict.measured:.1f}° 不在标准倒角角度系列内"
+                                f"（最近标准值 {target:.0f}°，偏差 {verdict.measured - target:+.1f}°）"
+                            ),
+                            measured=verdict.measured,
+                            threshold=verdict.threshold,
+                            unit=verdict.unit or "deg",
+                            suggestion=(
+                                f"将倒角角度改为 {target:.0f}°（标准倒角刀）；"
+                                f"若该角度由配合决定，请与工艺确认非标刀具或两刀合成方案。"
+                            ),
+                            feature_kind="chamfer",
+                            confidence=chamfer.confidence,
+                            location=point,
+                            extra={"size_mm": round(chamfer.size_mm, 4)},
+                        )
+                    )
+                else:                          # 尺寸不在标准系列
+                    findings.append(
+                        emit_finding(
+                            ctx,
+                            severity=verdict.severity,
+                            part_id=chamfer.part_id,
+                            face_ids=chamfer.face_ids,
+                            message=(
+                                f"【粗筛】零件 {chamfer.part_id} 倒角（面 {chamfer.face.face_id}）"
+                                f"尺寸 {verdict.measured:.2f} mm 不在标准倒角尺寸系列内"
+                                f"（最近标准值 {target:.1f} mm，偏差 {verdict.measured - target:+.2f} mm）"
+                            ),
+                            measured=verdict.measured,
+                            threshold=verdict.threshold,
+                            unit=verdict.unit or "mm",
+                            suggestion=(
+                                f"将倒角尺寸改为 {target:.1f} mm（标准系列），"
+                                f"角度 {chamfer.angle_deg:.0f}° 保持不变；"
+                                f"若为去毛刺倒角，可直接标注 C{target:.1f}。"
+                            ),
+                            feature_kind="chamfer",
+                            confidence=chamfer.confidence,
+                            location=point,
+                            extra={"angle_deg": round(chamfer.angle_deg, 2)},
+                        )
+                    )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         ang_tol = nonnegative_number(ctx.param("angle_tolerance_deg"))
         ang_tol = 5.0 if ang_tol is None else ang_tol
         size_tol = nonnegative_number(ctx.param("size_tolerance_mm"))

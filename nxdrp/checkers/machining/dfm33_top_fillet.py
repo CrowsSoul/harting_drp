@@ -16,6 +16,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -71,6 +72,114 @@ class TopFilletChecker(MachiningChecker):
         return norm(vec)
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    def _exempt_parts(self, ctx: CheckContext) -> set[str]:
+        """装配贴合面等允许保留锐边的零件，由模型 meta 声明（可选）。"""
+        raw = (ctx.model.meta or {}).get("sharp_edge_exempt_parts") or []
+        if isinstance(raw, str):
+            raw = [raw]
+        return {str(item) for item in raw}
+
+    # ---------------- 规则模型 v2：两段判定与豁免都写在 R-DFM-33 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        rmin = positive_number(ctx.param("min_top_fillet_mm")) or 0.5
+        up = self._up(ctx)
+        exempt = self._exempt_parts(ctx)
+
+        thresholds = {
+            part.part_id: _top_threshold(ctx, part, up) for part in ctx.model.parts
+        }
+
+        findings = []
+        # 1) 顶区锐边 → 缺圆角（按零件归并，避免刷屏）
+        sharp_by_part: dict[str, list] = {}
+        for edge in extract_sharp_edges(ctx.model):
+            threshold = thresholds.get(edge.part_id)
+            if threshold is None or edge.location is None:
+                continue
+            if dot(edge.location, up) < threshold:
+                continue
+            sharp_by_part.setdefault(edge.part_id, []).append(edge)
+        for part_id, edges in sharp_by_part.items():
+            face_ids = sorted({fid for e in edges for fid in e.face_ids})
+            try:
+                verdicts = ctx.evaluate(
+                    {
+                        "sharp_edge_count": len(edges),
+                        "exempt_edge": 1 if part_id in exempt else 0,
+                    }
+                )
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=part_id,
+                        face_ids=face_ids[:20],
+                        message=(
+                            f"【粗筛】零件 {part_id} 顶区存在 {len(edges)} 条锐边（两平面直接相交，"
+                            f"无圆角），顶边圆角缺失；标准要求顶边 R ≥ {float(verdict.threshold):.2f} mm"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit,
+                        suggestion=(
+                            f"为顶边添加 R{rmin:.1f} 以上圆角（推荐与零件其他圆角统一）；"
+                            f"若顶边为装配贴合面需要保持锐边，请在此处豁免并注明去毛刺要求。"
+                        ),
+                        feature_kind="sharp_edge",
+                        confidence=0.4,
+                        location=edges[0].location,
+                        extra={"sharp_edge_count": len(edges)},
+                    )
+                )
+
+        # 2) 顶区小圆角 → R 不足
+        for fillet in extract_fillets(ctx.model):
+            if fillet.interior:
+                continue
+            threshold = thresholds.get(fillet.part_id)
+            if threshold is None:
+                continue
+            point = face_point(fillet.face)
+            if point is None or dot(point, up) < threshold:
+                continue
+            try:
+                verdicts = ctx.evaluate({"radius": fillet.radius})
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=fillet.part_id,
+                        face_ids=fillet.face_ids,
+                        message=(
+                            f"【粗筛】零件 {fillet.part_id} 顶边圆角 R{fillet.radius:.2f} "
+                            f"< 标准刀具最小刀尖圆角 {float(verdict.threshold):.2f} mm，加工后顶边留尖角/刀痕"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit,
+                        suggestion=(
+                            f"将顶边圆角加大到 R{rmin:.1f} 以上，与标准刀具刀尖圆角匹配；"
+                            f"若为配合倒角而非圆角，请改标倒角尺寸。"
+                        ),
+                        feature_kind="fillet",
+                        confidence=fillet.confidence,
+                        location=point,
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         rmin = positive_number(ctx.param("min_top_fillet_mm")) or 0.5
         up = self._up(ctx)
 

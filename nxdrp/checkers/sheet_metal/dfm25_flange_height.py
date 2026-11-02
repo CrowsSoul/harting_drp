@@ -11,6 +11,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 from nxdrp.geom import bbox_extent_along, cross, face_normal, length, norm
 
 from ._sheet_metal_dfm_common import (
@@ -43,6 +44,80 @@ class FlangeHeightChecker(SheetMetalChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：翻边高度 < 3t+R 判定在 R-DFM-25 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        radius_override = positive_number(ctx.param("bend_radius_override_mm"))
+        feats = self.features(ctx.model, ctx.params)
+        findings = []
+        seen: set[tuple[str, float]] = set()
+        for bend in feats.bends:
+            thickness = self.thickness(feats, bend.part_id)
+            if thickness is None:
+                continue
+            radius = radius_override or bend.radius
+            for leg in bend.legs:
+                normal = face_normal(leg)
+                if normal is None or leg.bbox is None:
+                    continue
+                direction = norm(cross(bend.axis, normal))
+                if length(direction) <= 1e-9:
+                    continue
+                height = bbox_extent_along(leg.bbox, direction)
+                if height <= 1e-9:
+                    continue
+                try:
+                    verdicts = ctx.evaluate(
+                        {
+                            "height": height,
+                            "thickness": thickness.value,
+                            "radius": radius,
+                        }
+                    )
+                except ExprMissingSymbol:
+                    continue
+                key = (bend.face.face_id, round(height, 3))
+                if key in seen or not verdicts:
+                    continue
+                seen.add(key)
+                for verdict in verdicts:
+                    limit = float(verdict.threshold)
+                    findings.append(
+                        emit_finding(
+                            ctx,
+                            severity=verdict.severity,
+                            part_id=bend.part_id,
+                            face_ids=[bend.face.face_id, leg.face_id],
+                            message=(
+                                f"【粗筛】零件 {bend.part_id} 折弯面 {bend.face.face_id} 的腿面 "
+                                f"{leg.face_id} 展开高度 {float(verdict.measured):.3f} mm < "
+                                f"{limit / thickness.value:.2f}×t+R={limit:.3f} mm"
+                                f"（R={radius:.3f}，{thickness_text(thickness)}）"
+                            ),
+                            measured=verdict.measured,
+                            threshold=verdict.threshold,
+                            unit=verdict.unit or "mm",
+                            suggestion=(
+                                f"将翻边高度增大到至少 {limit:.2f} mm（自弯曲线附近起算），"
+                                f"或减小折弯半径。"
+                            ),
+                            thickness=thickness,
+                            feature_kind="flange",
+                            feature_confidence=bend.confidence,
+                            location=face_point(leg) or bend.point,
+                            note=(
+                                "钣金粗筛：翻边高度取腿面包围盒沿展开方向的跨度，"
+                                "包含弯区长度，需人工复核"
+                            ),
+                        )
+                    )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         ratio = positive_number(ctx.param("min_flange_height_ratio")) or 3.0
         radius_override = positive_number(ctx.param("bend_radius_override_mm"))
         feats = self.features(ctx.model, ctx.params)

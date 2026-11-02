@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""PERF-01 载流–温升。从模型里取导体圆柱，用回归树预测温升区间。"""
+"""PERF-01 载流–温升。
+
+计算由 ``rules/perf_formula_v2.json`` 的稳态电热公式完成，是否失败由同一
+规则里的 NX 风格比较式决定。回归树只保留为区间标定，不再决定 Finding。
+"""
 
 from __future__ import annotations
 
@@ -8,8 +12,10 @@ import os
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding, ModelBundle, Part
-from .physics import RULE_PARAMS, canonical_material, feature_vector
-from .tree_model import apply_interval, load, predict_temperature
+from .physics import RULE_PARAMS, canonical_material
+from .rule_engine import FormulaProgram, FormulaResult, load_formula
+from .solver_evidence import SolverEvidence, SolverEvidenceError, load_solver_evidence
+from .tree_model import apply_interval, load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(HERE, "data", "model.json")
@@ -28,13 +34,111 @@ def load_model():
     return _MODEL
 
 
-def predict_raw(area_mm2: float, length_mm: float, rho_ohm_m: float, current_a: float, h_w_m2k: float) -> dict:
-    """给一组工况，返回点预测和区间。调用前模型文件必须已经训练好。"""
-    model = load_model()
-    x = feature_vector(area_mm2, length_mm, rho_ohm_m, current_a, h_w_m2k)
-    point = max(0.0, predict_temperature(model, x))
-    low, high = apply_interval(point, model["q_low"], model["q_high"])
-    return {"delta_t_c": point, "delta_t_low_c": low, "delta_t_high_c": high}
+def default_formula() -> FormulaProgram:
+    return load_formula("PERF-01")
+
+
+def _formula_inputs(
+    area_mm2: float,
+    length_mm: float,
+    rho_ohm_m: float,
+    current_a: float,
+    h_w_m2k: float,
+    **overrides,
+) -> dict:
+    inferred_temp_coeff = RULE_PARAMS["materials"]["Cu"]["temp_coeff_per_c"]
+    for material in RULE_PARAMS["materials"].values():
+        if math.isclose(float(rho_ohm_m), float(material["rho_ohm_m"]), rel_tol=1e-12):
+            inferred_temp_coeff = float(material["temp_coeff_per_c"])
+            break
+    values = {
+        "area_mm2": float(area_mm2),
+        "length_mm": float(length_mm),
+        "rho_ohm_m": float(rho_ohm_m),
+        "temp_coeff_per_c": inferred_temp_coeff,
+        "current_a": float(current_a),
+        "ambient_temp_c": float(RULE_PARAMS["ambient_temp_c"]),
+        "h_w_m2k": float(h_w_m2k),
+        "emissivity": float(RULE_PARAMS["emissivity"]),
+        "contact_resistance_ohm_mm2": float(RULE_PARAMS["contact_resistance_ohm_mm2"]),
+        "reference_temp_c": float(RULE_PARAMS["reference_temp_c"]),
+        "max_solver_rise_c": float(RULE_PARAMS["max_solver_rise_c"]),
+        "max_rise_c": float(RULE_PARAMS["max_rise_c"]),
+        "max_temperature_c": float(RULE_PARAMS["max_temperature_c"]),
+    }
+    values.update({key: float(value) for key, value in overrides.items() if value is not None})
+    return values
+
+
+def evaluate_formula(
+    area_mm2: float,
+    length_mm: float,
+    rho_ohm_m: float,
+    current_a: float,
+    h_w_m2k: float,
+    *,
+    formula: FormulaProgram | None = None,
+    **overrides,
+) -> FormulaResult:
+    program = formula or default_formula()
+    return program.evaluate(_formula_inputs(area_mm2, length_mm, rho_ohm_m, current_a, h_w_m2k, **overrides))
+
+
+def _solver_evidence(model: ModelBundle, params: dict) -> SolverEvidence | None:
+    path = str(params.get("solver_result_path") or "").strip()
+    if not path:
+        return None
+    evidence = load_solver_evidence(
+        path,
+        expected_item="PERF-01",
+        expected_model_id=model.model_id,
+        expected_digest=model.content_digest(),
+        require_authorized=True,
+    )
+    evidence.value("delta_t_c", "degC")
+    evidence.value("maximum_temperature_c", "degC")
+    return evidence
+
+
+def predict_raw(
+    area_mm2: float,
+    length_mm: float,
+    rho_ohm_m: float,
+    current_a: float,
+    h_w_m2k: float,
+    *,
+    formula: FormulaProgram | None = None,
+    **overrides,
+) -> dict:
+    """给一组工况，返回公式点值、标定区间和规则判定。
+
+    ``delta_t_low_c``/``delta_t_high_c`` 只表达标定误差，不参与 PASS/FAIL。
+    """
+    result = evaluate_formula(
+        area_mm2, length_mm, rho_ohm_m, current_a, h_w_m2k,
+        formula=formula, **overrides,
+    )
+    point = max(0.0, float(result.values["delta_t_c"]))
+    try:
+        model = load_model()
+        low, high = apply_interval(point, model["q_low"], model["q_high"])
+    except (OSError, ValueError, KeyError):
+        low, high = point, point
+    return {
+        "delta_t_c": point,
+        "delta_t_low_c": low,
+        "delta_t_high_c": high,
+        "absolute_temperature_c": float(result.values["absolute_temperature_c"]),
+        "total_resistance_ohm": float(result.values["total_resistance_ohm"]),
+        "power_w": float(result.values["power_w"]),
+        "voltage_drop_v": float(result.values["voltage_drop_v"]),
+        "formula_id": result.formula_id,
+        "formula_values": result.values,
+        "decisions": [item.to_dict() for item in result.decisions],
+        "alarm": any(item.triggered for item in result.decisions),
+        "solver_iterations": result.iterations,
+        "solver_residual_w": result.residual,
+    }
 
 
 def _span(params: dict, lo_key: str, hi_key: str, value: float, label: str) -> str:
@@ -47,13 +151,18 @@ def _span(params: dict, lo_key: str, hi_key: str, value: float, label: str) -> s
 
 def condition_problem(params: dict) -> str:
     """工况或模型文件不满足时返回原因，满足则返回空串。"""
-    if not os.path.isfile(MODEL_PATH):
-        return "预测模型文件不存在，先运行 python -m nxdrp.checkers.performance.train"
+    try:
+        formula = default_formula()
+        formula.validate()
+    except Exception as exc:
+        return f"PERF-01 公式无法读取：{exc}"
+    trained = float(RULE_PARAMS["interval_confidence"])
     try:
         model = load_model()
-    except Exception as exc:
-        return f"预测模型无法读取：{exc}"
-    trained = float(model.get("interval_confidence", 0.8))
+    except Exception:
+        model = None
+    if model is not None:
+        trained = float(model.get("interval_confidence", trained))
     asked = float(params.get("interval_confidence", trained))
     if abs(asked - trained) > 0.02:
         return f"规则要求区间置信度 {asked:.2f}，当前模型只标定了 {trained:.2f}"
@@ -140,6 +249,7 @@ def predict_working_condition(
     if area_problem or length_problem:
         return {"ok": False, "reason": area_problem or length_problem}
     rho = float(merged["materials"][canon]["rho_ohm_m"])
+    temp_coeff = float(merged["materials"][canon]["temp_coeff_per_c"])
     current = float(merged["current_a"])
     h = float(merged["convection_h_w_m2k"])
     max_rise = float(merged["max_rise_c"])
@@ -147,8 +257,16 @@ def predict_working_condition(
         "area_mm2": float(area_mm2),
         "length_mm": float(length_mm),
         "rho_ohm_m": rho,
+        "temp_coeff_per_c": temp_coeff,
         "current_a": current,
         "h_w_m2k": h,
+        "ambient_temp_c": float(merged["ambient_temp_c"]),
+        "emissivity": float(merged["emissivity"]),
+        "contact_resistance_ohm_mm2": float(merged["contact_resistance_ohm_mm2"]),
+        "reference_temp_c": float(merged["reference_temp_c"]),
+        "max_solver_rise_c": float(merged["max_solver_rise_c"]),
+        "max_rise_c": max_rise,
+        "max_temperature_c": float(merged["max_temperature_c"]),
     }
     pred = predict_raw(**raw)
     rise = pred["delta_t_c"]
@@ -159,10 +277,21 @@ def predict_working_condition(
         "delta_t_c": rise,
         "delta_t_low_c": pred["delta_t_low_c"],
         "delta_t_high_c": pred["delta_t_high_c"],
+        "absolute_temperature_c": pred["absolute_temperature_c"],
+        "total_resistance_ohm": pred["total_resistance_ohm"],
+        "joule_power_w": pred["power_w"],
+        "voltage_drop_v": pred["voltage_drop_v"],
         "allowable_current_a": _allowable_current(
-            raw, max_rise, float(merged["current_a_min"]), float(merged["current_a_max"])
+            raw,
+            min(max_rise, float(merged["max_temperature_c"]) - float(merged["ambient_temp_c"])),
+            float(merged["current_a_min"]),
+            float(merged["current_a_max"]),
         ),
-        "alarm": rise >= max_rise,
+        "alarm": pred["alarm"],
+        "formula_id": pred["formula_id"],
+        "decisions": pred["decisions"],
+        "solver_iterations": pred["solver_iterations"],
+        "solver_residual_w": pred["solver_residual_w"],
         "max_rise_c": max_rise,
         "current_a": current,
         "ambient_temp_c": float(merged["ambient_temp_c"]),
@@ -195,11 +324,14 @@ def _search_area(raw: dict, max_rise: float, area_max: float) -> float | None:
     hi = float(area_max)
     if hi <= lo:
         return None
-    if predict_raw(hi, raw["length_mm"], raw["rho_ohm_m"], raw["current_a"], raw["h_w_m2k"])["delta_t_c"] >= max_rise:
+    probe = dict(raw)
+    probe["area_mm2"] = hi
+    if predict_raw(**probe)["delta_t_c"] >= max_rise:
         return None
     for _ in range(24):
         mid = 0.5 * (lo + hi)
-        rise = predict_raw(mid, raw["length_mm"], raw["rho_ohm_m"], raw["current_a"], raw["h_w_m2k"])["delta_t_c"]
+        probe["area_mm2"] = mid
+        rise = predict_raw(**probe)["delta_t_c"]
         if rise >= max_rise:
             lo = mid
         else:
@@ -210,7 +342,7 @@ def _search_area(raw: dict, max_rise: float, area_max: float) -> float | None:
 class CurrentTempChecker(BaseChecker):
     check_item_id = "PERF-01"
     name = "载流-温升预测"
-    version = "0.1.0"
+    version = "2.0.0"
     owner = "性能预测 杜滨芳"
     process_types = ("performance",)
     default_params = dict(RULE_PARAMS)
@@ -219,6 +351,10 @@ class CurrentTempChecker(BaseChecker):
         problem = condition_problem(params)
         if problem:
             return False, problem
+        try:
+            _solver_evidence(model, params)
+        except SolverEvidenceError as exc:
+            return False, str(exc)
         parts = conductor_parts(model, params)
         if not parts:
             return False, "模型中没有已知导体材料（Cu、CuSn6、CuZn37、CuBe2），缺少材料就不能预测温升"
@@ -238,7 +374,10 @@ class CurrentTempChecker(BaseChecker):
         ambient = float(params["ambient_temp_c"])
         h = float(params["convection_h_w_m2k"])
         max_rise = float(params["max_rise_c"])
+        max_temperature = float(params["max_temperature_c"])
         confidence = float(params["interval_confidence"])
+        formula = default_formula()
+        solver = _solver_evidence(ctx.model, params)
         findings = []
         for part in conductor_parts(ctx.model, params):
             material = canonical_material(part.material, materials)
@@ -246,21 +385,66 @@ class CurrentTempChecker(BaseChecker):
             if material is None or spec is None:
                 continue
             rho = float(materials[material]["rho_ohm_m"])
+            temp_coeff = float(materials[material]["temp_coeff_per_c"])
             raw = {
                 "area_mm2": spec["area_mm2"],
                 "length_mm": spec["length_mm"],
                 "rho_ohm_m": rho,
+                "temp_coeff_per_c": temp_coeff,
                 "current_a": current,
                 "h_w_m2k": h,
+                "ambient_temp_c": ambient,
+                "emissivity": float(params["emissivity"]),
+                "contact_resistance_ohm_mm2": float(params["contact_resistance_ohm_mm2"]),
+                "reference_temp_c": float(params["reference_temp_c"]),
+                "max_solver_rise_c": float(params["max_solver_rise_c"]),
+                "max_rise_c": max_rise,
+                "max_temperature_c": max_temperature,
             }
-            pred = predict_raw(**raw)
+            formula_pred = predict_raw(**raw)
+            pred = dict(formula_pred)
+            rule_result = None
+            if solver is not None:
+                solver_delta = solver.value("delta_t_c", "degC")
+                solver_absolute = solver.value("maximum_temperature_c", "degC")
+                inputs = _formula_inputs(
+                    raw["area_mm2"], raw["length_mm"], raw["rho_ohm_m"],
+                    raw["current_a"], raw["h_w_m2k"],
+                    temp_coeff_per_c=raw["temp_coeff_per_c"],
+                    ambient_temp_c=raw["ambient_temp_c"],
+                    emissivity=raw["emissivity"],
+                    contact_resistance_ohm_mm2=raw["contact_resistance_ohm_mm2"],
+                    reference_temp_c=raw["reference_temp_c"],
+                    max_solver_rise_c=raw["max_solver_rise_c"],
+                    max_rise_c=raw["max_rise_c"],
+                    max_temperature_c=raw["max_temperature_c"],
+                )
+                rule_result = formula.apply_solver_overrides(
+                    inputs,
+                    {
+                        "temperature_c": solver_absolute,
+                        "delta_t_c": solver_delta,
+                        "absolute_temperature_c": solver_absolute,
+                    },
+                )
+                pred.update({
+                    "delta_t_c": solver_delta,
+                    "absolute_temperature_c": solver_absolute,
+                    "decisions": [item.to_dict() for item in rule_result.decisions],
+                    "alarm": any(item.triggered for item in rule_result.decisions),
+                })
             rise = pred["delta_t_c"]
-            if rise < max_rise:
+            triggered = [d for d in pred["decisions"] if d["triggered"]]
+            if not triggered:
                 continue
-            target_area = _search_area(raw, max_rise, float(params["area_mm2_max"]))
+            primary = next((d for d in triggered if d["condition"].startswith("delta_t_c")), triggered[0])
+            measured = float(primary["measured"] if primary["measured"] is not None else rise)
+            threshold = float(primary["threshold"] if primary["threshold"] is not None else max_rise)
+            rise_budget = max(0.0, min(max_rise, max_temperature - ambient))
+            target_area = _search_area(raw, rise_budget, float(params["area_mm2_max"]))
             # 只在「当前电流及以下」找不报警的最大电流，和推理接口里的允许电流同一套搜索。
             allow_current = _allowable_current(
-                raw, max_rise, float(params["current_a_min"]), min(float(params["current_a_max"]), current)
+                raw, rise_budget, float(params["current_a_min"]), min(float(params["current_a_max"]), current)
             )
             actions = []
             delta = {"current_a": round(allow_current, 3)}
@@ -278,22 +462,27 @@ class CurrentTempChecker(BaseChecker):
                 ctx.finding(
                     message=(
                         f"零件 {part.part_id}（{material}）在 {current:.1f} A、环境 {ambient:.0f} °C 下，"
-                        f"预测稳态温升 {rise:.1f} °C（{low:.1f}–{high:.1f} °C，置信度 {confidence:.0%}），"
-                        f"不低于允许温升 {max_rise:.1f} °C。"
+                        f"{'NX 求解结果' if solver else '公式 ' + pred['formula_id']}求得稳态温升 {rise:.1f} °C（标定区间 "
+                        f"{low:.1f}–{high:.1f} °C），绝对温度 {pred['absolute_temperature_c']:.1f} °C；"
+                        f"判定式 {primary['condition']} 成立。"
                         + "，".join(actions)
                         + "。"
                     ),
                     part_refs=[part.part_id],
                     location=spec["cog"],
                     bbox=part.bbox,
-                    measured_value=rise,
-                    threshold_value=max_rise,
+                    severity=primary["severity"] or ctx.rule.severity,
+                    measured_value=measured,
+                    threshold_value=threshold,
                     unit="°C",
                     confidence=confidence,
                     suggestion_text="，".join(actions) + "。",
                     suggestion_delta=delta,
                     face_ids=[spec["face_id"]],
-                    note="截面积取该零件半径最小的圆柱面，按 πr² 作为载流瓶颈",
+                    note=(
+                        "采用稳态电热公式；判定来自 formula_ref=PERF-01 的比较式。"
+                        "区间只用于不确定性展示。"
+                    ),
                     extra={
                         "delta_t_c": rise,
                         "delta_t_low_c": low,
@@ -306,6 +495,24 @@ class CurrentTempChecker(BaseChecker):
                         "length_mm": spec["length_mm"],
                         "material": material,
                         "absolute_temp_c": ambient + rise,
+                        "absolute_temperature_c": pred["absolute_temperature_c"],
+                        "max_temperature_c": max_temperature,
+                        "total_resistance_ohm": pred["total_resistance_ohm"],
+                        "joule_power_w": pred["power_w"],
+                        "voltage_drop_v": pred["voltage_drop_v"],
+                        "formula_id": pred["formula_id"],
+                        "formula_values": pred["formula_values"],
+                        "decision": primary,
+                        "decisions": pred["decisions"],
+                        "calculation_method": "cae_solver" if solver else "formula",
+                        "solver_evidence": solver.as_dict() if solver else None,
+                        "formula_crosscheck_values": formula_pred["formula_values"],
+                        "formula_solver_delta_difference_c": (
+                            rise - formula_pred["delta_t_c"] if solver else None
+                        ),
+                        "rule_reference": ctx.rule.reference,
+                        "solver_iterations": pred["solver_iterations"],
+                        "solver_residual_w": pred["solver_residual_w"],
                     },
                 )
             )

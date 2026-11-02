@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from ...checkers.base import CheckContext
 from ...contracts import Finding, ModelBundle
+from ...expr import ExprMissingSymbol
 from ._assembly_base import AssemblyChecker
 from ._assembly_common import (
     EPS,
@@ -46,6 +47,55 @@ class HoleSlotAlignmentChecker(AssemblyChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> list[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：孔/槽偏差判定在 R-DFM-04 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        offset_limit = float(ctx.param("center_offset_tolerance_mm", 0.2))
+        angle_limit = float(ctx.param("axis_angle_tolerance_deg", 1.0))
+        findings: list[Finding] = []
+        for hole, slot in self._pairs(ctx.model, ctx.params):
+            offset = radial_offset(hole.center, slot.center, slot.axis)
+            angle = unsigned_axis_angle_deg(hole.axis, slot.axis)
+            try:
+                verdicts = ctx.evaluate({"offset_mm": offset, "angle_deg": angle})
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(ctx.finding(
+                    severity=verdict.severity,
+                    message=(
+                        f"零件 {hole.part_id} 的孔与 {slot.part_id} 的槽未对齐："
+                        f"中心偏差 {offset:.3f} mm，轴线夹角 {angle:.3f}°。"
+                    ),
+                    part_refs=[hole.part_id, slot.part_id],
+                    location=hole.center,
+                    measured_value=verdict.measured,
+                    threshold_value=verdict.threshold,
+                    unit=verdict.unit or "mm",
+                    confidence=min(hole.confidence, slot.confidence),
+                    face_ids=hole.face_ids + slot.face_ids,
+                    suggestion_text=(
+                        f"移动孔中心或槽中线，使中心偏差≤{offset_limit:.3f} mm，"
+                        f"轴线夹角≤{angle_limit:.3f}°。"
+                    ),
+                    suggestion_delta={
+                        "center_offset_tolerance_mm": offset_limit,
+                        "axis_angle_tolerance_deg": angle_limit,
+                    },
+                    extra={
+                        "center_offset_mm": offset,
+                        "axis_angle_deg": angle,
+                        "hole_diameter_mm": hole.diameter,
+                        "slot_width_mm": slot.width,
+                    },
+                ))
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> list[Finding]:
         offset_limit = float(ctx.param("center_offset_tolerance_mm", 0.2))
         angle_limit = float(ctx.param("axis_angle_tolerance_deg", 1.0))
         findings: list[Finding] = []

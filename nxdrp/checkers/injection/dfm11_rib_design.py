@@ -7,6 +7,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ._rules import injection_default_params
 from ._common import (
     feature_face_ids,
@@ -71,6 +72,98 @@ class RibDesignChecker(BaseChecker):
         return inferred
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：筋根/筋高两项判定在 R-DFM-11 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        records = meta_features(ctx, "ribs") or self._inferred_ribs(ctx)
+        max_root_ratio = float(ctx.param("max_rib_root_to_wall_ratio"))
+        max_height_ratio = float(ctx.param("max_rib_height_to_root_ratio"))
+        samples = wall_samples(ctx)
+        findings: list[Finding] = []
+        for rib in records:
+            part_id = str(rib.get("part_id") or "")
+            if not part_id:
+                continue
+            try:
+                root = float(rib.get("root_thickness_mm"))
+                height = float(rib.get("height_mm"))
+            except (TypeError, ValueError):
+                continue
+            if root <= 0.0 or height <= 0.0:
+                continue
+            nominal = nominal_wall_for_part(
+                ctx, part_id, samples, ctx.param("nominal_wall_thickness_mm")
+            )
+            root_ratio = root / nominal if nominal and nominal > 0.0 else None
+            height_ratio = height / root
+            measurements = {"height_ratio": height_ratio}
+            if root_ratio is not None:
+                measurements["root_ratio"] = root_ratio
+            try:
+                verdicts = ctx.evaluate(measurements)
+            except ExprMissingSymbol:
+                continue
+            height_bad = height_ratio > max_height_ratio
+            target_root = nominal * max_root_ratio if nominal else root
+            origin = str(rib.get("origin") or "upstream_feature")
+            part = ctx.part(part_id)
+            for verdict in verdicts:
+                root_bad = verdict.case_index == 0
+                if root_bad and height_bad:
+                    message = (
+                        f"筋根厚/壁厚 {root_ratio:.2f} > {max_root_ratio:.2f}，"
+                        f"筋高/根厚 {height_ratio:.2f} > {max_height_ratio:.1f}"
+                    )
+                elif root_bad:
+                    message = (
+                        f"筋根厚 {root:.2f} mm 为名义壁厚 {nominal:.2f} mm 的 "
+                        f"{root_ratio:.2f} 倍，超过 {max_root_ratio:.2f}"
+                    )
+                else:
+                    message = (
+                        f"筋高/根厚 {height_ratio:.2f} 超过 {max_height_ratio:.1f}，"
+                        f"根部填充与顶出风险高"
+                    )
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        part_refs=[part_id],
+                        location=feature_location(ctx, rib),
+                        bbox=part.bbox if part else None,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "比值",
+                        confidence=0.9 if origin == "upstream_feature" else 0.62,
+                        face_ids=feature_face_ids(rib),
+                        message=message,
+                        suggestion_text=(
+                            f"把筋根厚控制在 {target_root:.2f} mm 以内，"
+                            f"必要时增加筋数量或缩短筋高至根厚的 {max_height_ratio:.0f} 倍以内。"
+                        ),
+                        suggestion_delta={
+                            "max_root_thickness_mm": round(target_root, 3),
+                            "max_height_mm": round(max(target_root, 0.1) * max_height_ratio, 3),
+                        },
+                        note=(
+                            "使用上游筋特征"
+                            if origin == "upstream_feature"
+                            else "由细长壁厚样本推断，需在截面上确认是否为加强筋"
+                        ),
+                        extra={
+                            "root_thickness_mm": round(root, 4),
+                            "height_mm": round(height, 4),
+                            "nominal_wall_mm": round(nominal, 4) if nominal else None,
+                            "method": origin,
+                        },
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         records = meta_features(ctx, "ribs") or self._inferred_ribs(ctx)
         max_root_ratio = float(ctx.param("max_rib_root_to_wall_ratio"))
         max_height_ratio = float(ctx.param("max_rib_height_to_root_ratio"))

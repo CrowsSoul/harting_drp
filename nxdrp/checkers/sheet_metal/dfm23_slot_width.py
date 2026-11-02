@@ -11,6 +11,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._sheet_metal_dfm_common import (
     SheetMetalChecker,
@@ -36,6 +37,59 @@ class SlotWidthChecker(SheetMetalChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：槽宽下限判定在 R-DFM-23 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        feats = self.features(ctx.model, ctx.params)
+        findings = []
+        for slot in feats.slots:
+            thickness = self.thickness(feats, slot.part_id)
+            if thickness is None:
+                continue
+            try:
+                verdicts = ctx.evaluate(
+                    {"width": slot.width, "thickness": thickness.value}
+                )
+            except ExprMissingSymbol:
+                continue
+            faces = "、".join(slot.face_ids)
+            for verdict in verdicts:
+                limit = float(verdict.threshold)
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=slot.part_id,
+                        face_ids=slot.face_ids,
+                        message=(
+                            f"【粗筛】零件 {slot.part_id} 槽（面 {faces}）宽度 "
+                            f"{float(verdict.measured):.3f} mm < {limit / thickness.value:.2f}×t={limit:.3f} mm"
+                            f"（{thickness_text(thickness)}）"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        suggestion=(
+                            f"将槽宽增大到至少 {limit:.2f} mm，"
+                            f"或改用更薄板材/激光切割工艺。"
+                        ),
+                        thickness=thickness,
+                        feature_kind="slot",
+                        feature_confidence=slot.confidence,
+                        location=slot.location,
+                        note=(
+                            "钣金粗筛：只识别直槽（对置平面壁 + 共同平面槽底），"
+                            "圆角槽/异形槽会被漏检，需人工复核"
+                        ),
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         ratio = positive_number(ctx.param("min_slot_width_ratio")) or 1.2
         feats = self.features(ctx.model, ctx.params)
         findings = []

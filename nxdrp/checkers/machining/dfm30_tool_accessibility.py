@@ -16,6 +16,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -48,6 +49,100 @@ class ToolAccessibilityChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：遮挡判据在 R-DFM-30 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        findings = []
+        for hole, end, opening, radius, env_len, blockers in self._envelopes(ctx):
+            try:
+                verdicts = ctx.evaluate(
+                    {"blocker_count": len(blockers), "envelope_radius": radius}
+                )
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=hole.part_id,
+                        face_ids=hole.face_ids + [end.face.face_id],
+                        message=(
+                            f"【粗筛】零件 {hole.part_id} 孔（面 {'、'.join(hole.face_ids)}）"
+                            f"孔口 {end.face.face_id} 沿轴 {env_len:.0f} mm 刀具包络"
+                            f"（半径 {radius:.1f} mm）与零件 {'、'.join(sorted(blockers))} 的"
+                            f"包围盒相交，刀具可能不可达"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        suggestion=(
+                            "复核装配状态下该孔的加工/装配次序：先加工后装配，"
+                            "或调整相邻零件结构让出刀具包络；若为装配后配作孔，"
+                            "请在此处豁免并注明配作工序。"
+                        ),
+                        feature_kind="tool_envelope",
+                        confidence=0.3,
+                        location=opening,
+                        note=(
+                            "二期占位粗筛：包围盒级近似，仅查跨零件遮挡，"
+                            "未建模刀柄形状与同零件遮挡，需人工复核"
+                        ),
+                        extra={
+                            "blockers": sorted(blockers),
+                            "envelope_length_mm": env_len,
+                            "envelope_radius_mm": round(radius, 4),
+                        },
+                    )
+                )
+        return findings
+
+    def _envelopes(self, ctx: CheckContext):
+        """几何层：逐孔口计算刀具包络与遮挡零件（新旧路径共用）。"""
+        clearance = positive_number(ctx.param("tool_clearance_mm")) or 2.0
+        env_len = positive_number(ctx.param("envelope_length_mm")) or 40.0
+
+        other_boxes = {
+            part.part_id: part.bbox for part in ctx.model.parts if part.bbox is not None
+        }
+        centers = {
+            part.part_id: part.bbox.center
+            for part in ctx.model.parts
+            if part.bbox is not None
+        }
+
+        for hole in extract_holes(ctx.model):
+            if hole.is_boss:
+                continue
+            part_center = centers.get(hole.part_id)
+            for end in hole.ends:
+                if end.kind != "opening":
+                    continue
+                opening = face_point(end.face)
+                if opening is None or part_center is None:
+                    continue
+                outward = sub(opening, part_center)
+                sign = 1.0 if dot(outward, hole.axis) >= 0 else -1.0
+                direction = scale(norm(hole.axis), sign)
+                far = (
+                    opening[0] + direction[0] * env_len,
+                    opening[1] + direction[1] * env_len,
+                    opening[2] + direction[2] * env_len,
+                )
+                radius = hole.r_max + clearance
+                blockers = [
+                    pid
+                    for pid, box in other_boxes.items()
+                    if pid != hole.part_id
+                    and segment_bbox_distance(opening, far, box) < radius
+                ]
+                yield hole, end, opening, radius, env_len, blockers
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         clearance = positive_number(ctx.param("tool_clearance_mm")) or 2.0
         env_len = positive_number(ctx.param("envelope_length_mm")) or 40.0
 

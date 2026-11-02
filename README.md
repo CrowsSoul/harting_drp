@@ -87,7 +87,7 @@
 ```powershell
 cd harting_drp_merged
 
-# 0) 可选：装平台与报告需要的包（不装也能跑检查与大部分测试）
+# 0) 可选：装平台与报告需要的包（不装也能运行核心检查）
 python -m pip install -r requirements.txt
 
 # 1) 体检：NX 在不在、插件能加载几个
@@ -111,9 +111,6 @@ python -m nxdrp extract "C:\path\to\housing.prt" -o housing.model.json
 ```
 
 首次约 30 秒（NX 要启动），之后走缓存，几十毫秒。
-
-**跑测试**：`python -m unittest discover -s tests` →
-装了可选依赖 312 项全过；没装时 303 项通过、4 项跳过（平台、平台-报告 联调、报告 导出两条），零失败。
 
 **启动 Web 平台**：双击 `启动平台.cmd`。它用包内自带的 `.venv`（基座 `.python\python.exe`）起服务，
 自动避开被占用的端口，等 `/api/health` 正常后自动打开浏览器，窗口里也会打印地址。
@@ -154,7 +151,6 @@ harting_drp/
 │   ├── models/                 三套评测场景 + Mock + 2 个真实 NX 零件
 │   ├── labels/                 标注集（评测用）
 │   └── scenes/                 场景的 .prt 原文件
-├── tests/                      312 个单元测试
 ├── tools/                      生成骨架 / 规则 / Mock / 看板的小工具
 ├── contracts/schema/           三份 JSON Schema
 └── docs/                       文档与运行截图
@@ -174,7 +170,6 @@ harting_drp/
 | 跑全量并出结果文件 | `python -m nxdrp check 模型.json -o out.json` |
 | **给结果打分** | `python -m nxdrp eval out.json -l 标注集.json` |
 | 解析一个新模型 | `python -m nxdrp extract a.prt -o a.json` |
-| 跑测试 | `python -m unittest discover -s tests` |
 
 ---
 

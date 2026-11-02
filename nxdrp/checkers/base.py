@@ -131,6 +131,29 @@ class CheckContext:
     def param(self, key: str, default: Any = None) -> Any:
         return self.params.get(key, default)
 
+    def evaluate(self, measurements: dict) -> list:
+        """按 ``rule.expression`` 求值，返回命中的 CaseVerdict 列表（0 或 1 条）。
+
+        迁移期约定（规则模型 v2）：
+
+        * 规则没有 expression 时抛 ``ExprRuleError``——checker 必须先用
+          ``self.rule.has_expression`` 判断，旧路径原样保留；
+        * 缺测量量抛 ``ExprMissingSymbol``——checker 捕获后跳过该特征，不猜结果；
+        * ``ExprUnitError`` / ``ExprTypeError`` 是规则数据问题，不捕获，
+          由管线记为 checker error 响亮暴露。
+        """
+        from ..expr import ExprRuleError, SymbolContext, evaluate_rule
+
+        if not self.rule.has_expression:
+            raise ExprRuleError(
+                f"{self.rule.check_item_id} 的规则没有 expression，不能调用 ctx.evaluate()"
+            )
+        units = (self.rule.expression or {}).get("units") or {}
+        return evaluate_rule(
+            self.rule,
+            SymbolContext(params=self.params, meas=dict(measurements), units=dict(units)),
+        )
+
     def parts(self, body_type: str | None = None) -> list[Part]:
         if body_type is None:
             return list(self.model.parts)

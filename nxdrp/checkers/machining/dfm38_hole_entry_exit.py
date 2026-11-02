@@ -13,6 +13,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -42,6 +43,65 @@ class HoleEntryExitChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：孔口夹角判定在 R-DFM-38 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        max_angle = nonnegative_number(ctx.param("max_entry_angle_deg"))
+        max_angle = 5.0 if max_angle is None else max_angle
+        findings = []
+        for hole in extract_holes(ctx.model):
+            if hole.is_boss:
+                continue
+            for end in hole.ends:
+                if end.kind != "opening":
+                    continue
+                normal = face_normal(end.face)
+                if normal is None:
+                    continue
+                angle = acute_angle_deg(normal, hole.axis)
+                try:
+                    verdicts = ctx.evaluate({"angle_deg": angle})
+                except ExprMissingSymbol:
+                    continue
+                diameter = 2.0 * hole.r_min
+                point = face_point(end.face)
+                for verdict in verdicts:
+                    findings.append(
+                        emit_finding(
+                            ctx,
+                            severity=verdict.severity,
+                            part_id=hole.part_id,
+                            face_ids=hole.face_ids + [end.face.face_id],
+                            message=(
+                                f"【粗筛】零件 {hole.part_id} 孔（面 {'、'.join(hole.face_ids)}）"
+                                f"孔口面 {end.face.face_id} 与孔轴夹角 {verdict.measured:.1f}° > "
+                                f"{float(verdict.threshold):.1f}°，"
+                                f"钻头入刀/出刀易滑偏（孔径 Ø{diameter:.2f}）"
+                            ),
+                            measured=verdict.measured,
+                            threshold=verdict.threshold,
+                            unit=verdict.unit or "deg",
+                            suggestion=(
+                                "优先将孔口面改为与孔轴垂直（先铣平面/锪平台再钻孔）；"
+                                "结构受限时，用定心钻或刚性好的短钻，入刀降速，"
+                                "并与工艺确认斜面钻孔方案。"
+                            ),
+                            feature_kind="hole_opening",
+                            confidence=hole.confidence,
+                            location=point or hole.center,
+                            extra={
+                                "diameter_mm": round(diameter, 4),
+                                "opening_face_id": end.face.face_id,
+                            },
+                        )
+                    )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         max_angle = nonnegative_number(ctx.param("max_entry_angle_deg"))
         max_angle = 5.0 if max_angle is None else max_angle
 

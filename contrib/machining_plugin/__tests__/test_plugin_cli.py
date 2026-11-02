@@ -63,7 +63,7 @@ class PluginDiscoveryTests(unittest.TestCase):
 class RuleBookTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.rulebook = RuleBook.load(str(PLUGIN_ROOT / "rules_m6b.json"))
+        cls.rulebook = RuleBook.load(str(PLUGIN_ROOT / "rules.json"))
 
     def test_twelve_enabled_rules(self):
         self.assertEqual(len(self.rulebook.rules), 12)

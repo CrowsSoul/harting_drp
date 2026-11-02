@@ -7,6 +7,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ._rules import injection_default_params
 from ._common import boss_features, feature_face_ids, feature_location, nominal_wall_for_part, wall_samples
 
@@ -38,6 +39,119 @@ class BossDesignChecker(BaseChecker):
         return nominal, "nominal_wall"
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：最不利尺寸的判定在 R-DFM-15 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        records = boss_features(ctx)
+        if not records:
+            return []
+        samples = wall_samples(ctx)
+        findings: list[Finding] = []
+        for rec in records:
+            part_id = str(rec.get("part_id") or "")
+            part = ctx.part(part_id)
+            if part is None:
+                continue
+            nominal = nominal_wall_for_part(
+                ctx, part_id, samples, ctx.param("nominal_wall_thickness_mm")
+            )
+            wall, wall_source = self._boss_wall(rec, nominal)
+            issues = self._issues(ctx, rec, wall)
+            if not issues:
+                continue
+            kind, measured, threshold, label = min(
+                issues, key=lambda v: v[1] / max(v[2], 1e-9)
+            )
+            try:
+                verdicts = ctx.evaluate(
+                    {"worst_measured": float(measured), "worst_threshold": float(threshold)}
+                )
+            except ExprMissingSymbol:
+                continue
+            origin = str(rec.get("origin") or "upstream_feature")
+            for verdict in verdicts:
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        part_refs=[part_id],
+                        location=feature_location(ctx, rec),
+                        bbox=part.bbox,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        confidence=0.9 if origin == "upstream_feature" else 0.66,
+                        face_ids=feature_face_ids(rec),
+                        message=(
+                            f"{label} {float(verdict.measured):.2f} mm < "
+                            f"要求 {float(verdict.threshold):.2f} mm"
+                        ),
+                        suggestion_text=(
+                            f"将{label}增加到至少 {float(verdict.threshold):.2f} mm；"
+                            "凸台与主壁同厚过近时，改用减胶槽或加强筋连接。"
+                        ),
+                        suggestion_delta={"target_value_mm": round(float(verdict.threshold), 3)},
+                        note=(
+                            "来自上游凸台特征"
+                            if origin == "upstream_feature"
+                            else "由圆柱面与圆形端盖推断凸台，建议用截面确认是否空心"
+                        ),
+                        extra={
+                            "issue": kind,
+                            "wall_thickness_source": wall_source,
+                            "all_issues": [
+                                {"kind": k, "measured_mm": round(v, 3), "threshold_mm": round(t, 3)}
+                                for k, v, t, _ in issues
+                            ],
+                            "method": origin,
+                        },
+                    )
+                )
+        return findings
+
+    def _issues(self, ctx: CheckContext, rec: dict, wall: float | None) -> list[tuple[str, float, float, str]]:
+        """收集该凸台的潜在问题（问题选择是产物逻辑，判定本身在 expression）。"""
+        issues = []
+        min_wall = float(ctx.param("min_boss_wall_thickness_mm"))
+        if wall is not None and wall < min_wall:
+            issues.append(("boss_wall", wall, min_wall, "凸台壁厚"))
+
+        top = rec.get("top_thickness_mm")
+        min_top = float(ctx.param("min_top_thickness_mm"))
+        if top is not None:
+            try:
+                top_val = float(top)
+                if top_val < min_top:
+                    issues.append(("top_thickness", top_val, min_top, "凸台顶厚"))
+            except (TypeError, ValueError):
+                pass
+
+        root = rec.get("root_fillet_radius_mm", rec.get("root_radius_mm"))
+        min_root_ratio = float(ctx.param("min_root_fillet_to_wall_ratio"))
+        if root is not None and wall is not None:
+            try:
+                root_val = float(root)
+                root_min = wall * min_root_ratio
+                if root_val < root_min:
+                    issues.append(("root_fillet", root_val, root_min, "凸台根部圆角"))
+            except (TypeError, ValueError):
+                pass
+
+        clearance = rec.get("side_wall_clearance_mm")
+        min_clearance = float(ctx.param("min_side_wall_clearance_mm"))
+        if clearance is not None:
+            try:
+                clear_val = float(clearance)
+                if clear_val < min_clearance:
+                    issues.append(("side_clearance", clear_val, min_clearance, "凸台到侧壁距离"))
+            except (TypeError, ValueError):
+                pass
+        return issues
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         records = boss_features(ctx)
         if not records:
             return []

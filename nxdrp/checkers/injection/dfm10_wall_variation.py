@@ -8,6 +8,7 @@ from typing import Iterable
 
 from ...checkers.base import BaseChecker, CheckContext
 from ...contracts import Finding
+from ...expr import ExprMissingSymbol
 from ._rules import injection_default_params
 from ._common import edge_between, edge_index, wall_samples
 
@@ -22,7 +23,12 @@ class WallVariationChecker(BaseChecker):
     default_params = injection_default_params("DFM-10")
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
-        limit = float(ctx.param("max_gradient_ratio"))
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    def _pairs_and_edges(self, ctx: CheckContext):
+        """几何层：共享边/相邻的壁厚样本对（新旧路径共用）。"""
         samples = wall_samples(ctx)
         by_face: dict[str, list] = defaultdict(list)
         for sample in samples:
@@ -38,8 +44,62 @@ class WallVariationChecker(BaseChecker):
         for a, b in ctx.model.adjacency:
             if a in by_face and b in by_face:
                 pairs.add(tuple(sorted((a, b))))
+        return by_face, pairs, edge_index(ctx.model)
 
-        edges = edge_index(ctx.model)
+    # ---------------- 规则模型 v2：相邻壁厚变化率判定在 R-DFM-10 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        limit = float(ctx.param("max_gradient_ratio"))
+        by_face, pairs, edges = self._pairs_and_edges(ctx)
+        findings: list[Finding] = []
+        for a_id, b_id in sorted(pairs):
+            a_sample = min(by_face[a_id], key=lambda s: s.thickness_mm)
+            b_sample = min(by_face[b_id], key=lambda s: s.thickness_mm)
+            if a_sample.part_id != b_sample.part_id:
+                continue
+            ta, tb = a_sample.thickness_mm, b_sample.thickness_mm
+            ratio = abs(tb - ta) / max(abs(ta), abs(tb), 1e-9)
+            try:
+                verdicts = ctx.evaluate({"ratio": ratio, "thickness_a": ta, "thickness_b": tb})
+            except ExprMissingSymbol:
+                continue
+            edge = edge_between(edges, a_id, b_id)
+            a_face, b_face = ctx.face(a_id), ctx.face(b_id)
+            loc = None
+            if a_face is not None and a_face.cog is not None and b_face is not None and b_face.cog is not None:
+                loc = tuple((a_face.cog[i] + b_face.cog[i]) / 2.0 for i in range(3))
+            part = ctx.part(a_sample.part_id)
+            for verdict in verdicts:
+                findings.append(
+                    ctx.finding(
+                        severity=verdict.severity,
+                        part_refs=[a_sample.part_id],
+                        location=loc,
+                        bbox=part.bbox if part else None,
+                        measured_value=verdict.measured,
+                        threshold_value=verdict.threshold,
+                        unit=verdict.unit or "%",
+                        confidence=0.82,
+                        face_ids=[a_id, b_id],
+                        edge_ids=[edge.edge_id] if edge else [],
+                        message=(
+                            f"相邻区域壁厚由 {ta:.3f} mm 变为 {tb:.3f} mm，"
+                            f"变化率 {float(verdict.measured):.1f}% > {float(verdict.threshold):.1f}%"
+                        ),
+                        suggestion_text=(
+                            f"将相邻壁厚差控制在 {float(verdict.threshold):.0f}% 以内，"
+                            f"建议从较厚侧做长度不小于 3 倍壁厚差的渐变。"
+                        ),
+                        suggestion_delta={"max_gradient_ratio": limit},
+                        note="按共享边或上游相邻壁厚区域计算变化率",
+                        extra={"thickness_a_mm": round(ta, 4), "thickness_b_mm": round(tb, 4)},
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
+        limit = float(ctx.param("max_gradient_ratio"))
+        by_face, pairs, edges = self._pairs_and_edges(ctx)
         findings: list[Finding] = []
         for a_id, b_id in sorted(pairs):
             a_sample = min(by_face[a_id], key=lambda s: s.thickness_mm)

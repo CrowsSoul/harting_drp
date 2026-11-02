@@ -14,6 +14,7 @@ from typing import Iterable
 
 from nxdrp.checkers.base import CheckContext
 from nxdrp.contracts import Finding
+from nxdrp.expr import ExprMissingSymbol
 
 from ._machining_common import (
     MachiningChecker,
@@ -38,6 +39,51 @@ class NarrowPassageChecker(MachiningChecker):
         return True, ""
 
     def check(self, ctx: CheckContext) -> Iterable[Finding]:
+        if ctx.rule.has_expression:
+            return self._check_expression(ctx)
+        return self._check_legacy(ctx)
+
+    # ---------------- 规则模型 v2：最小宽度判定在 R-DFM-37 的 expression 里 ----------------
+    def _check_expression(self, ctx: CheckContext) -> list[Finding]:
+        fallback = tool_values(ctx, None, "min_tool_diameter_mm", [1.0])
+        wmin = positive_number(ctx.param("min_channel_width_mm")) or (fallback[0] if fallback else 1.0)
+        findings = []
+        for slot in extract_slots(ctx.model):
+            if slot.width <= 0:
+                continue
+            try:
+                verdicts = ctx.evaluate({"width": slot.width, "depth": slot.depth})
+            except ExprMissingSymbol:
+                continue
+            for verdict in verdicts:
+                findings.append(
+                    emit_finding(
+                        ctx,
+                        severity=verdict.severity,
+                        part_id=slot.part_id,
+                        face_ids=slot.face_ids,
+                        message=(
+                            f"【粗筛】零件 {slot.part_id} 通道（面 {'、'.join(slot.face_ids)}）"
+                            f"宽度 {verdict.measured:.3f} mm < 最小刀具直径 {float(verdict.threshold):.2f} mm，刀具无法进入"
+                        ),
+                        measured=verdict.measured,
+                        threshold=verdict.threshold,
+                        unit=verdict.unit or "mm",
+                        suggestion=(
+                            f"将通道宽度加大到 {wmin:.2f} mm 以上；若宽度由功能决定，"
+                            f"改用电火花、线切割或激光加工，并在图纸上注明特种加工要求。"
+                        ),
+                        feature_kind="narrow_passage",
+                        confidence=slot.confidence,
+                        location=slot.location,
+                        note="二期粗筛：只比对通道宽度，未做刀具包络遮挡分析，需人工复核",
+                        extra={"depth_mm": round(slot.depth, 4)},
+                    )
+                )
+        return findings
+
+    # ---------------- 旧路径：规则没有 expression 时照旧跑（兼容期保留） ----------------
+    def _check_legacy(self, ctx: CheckContext) -> Iterable[Finding]:
         fallback = tool_values(ctx, None, "min_tool_diameter_mm", [1.0])
         wmin = positive_number(ctx.param("min_channel_width_mm")) or (fallback[0] if fallback else 1.0)
 

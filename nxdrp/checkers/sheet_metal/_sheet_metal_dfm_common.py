@@ -506,19 +506,27 @@ def emit_finding(
     feature_confidence: float,
     location: Vec3 | None = None,
     note: str = "",
+    severity: str | None = None,
+    unit: str = "mm",
 ):
-    """统一产出带粗筛标记、料厚来源、低置信度的 Finding。"""
+    """统一产出带粗筛标记、料厚来源、低置信度的 Finding。
+
+    severity 缺省沿用旧行为 P2；v2 路径传入 CaseVerdict 的 severity。
+    舍入位数以规则库 rounding 为准，老规则沿用 4 位。
+    """
     confidence = min(
         0.6,
         0.3 + 0.4 * float(thickness.confidence) + 0.2 * float(feature_confidence),
     )
+    digits = ctx.rule.rounding if ctx.rule.rounding is not None else 4
     return ctx.finding(
-        severity="P2",
+        severity=severity or "P2",
         message=message,
         part_refs=[part_id],
         location=location,
-        measured_value=round(float(measured), 4),
-        threshold_value=round(float(threshold), 4),
+        measured_value=round(float(measured), digits),
+        threshold_value=round(float(threshold), digits),
+        unit=unit,
         confidence=round(confidence, 3),
         suggestion_text=suggestion,
         face_ids=list(face_ids),

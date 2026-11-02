@@ -78,13 +78,17 @@
       "formula_library": "rules/perf_formula_v2.json#PERF-01",
       "nx_role": "thermal network and conditional-result semantics",
       "local_components": ["contact resistance correlation", "lumped conductor geometry"],
-      "not_replicated": ["proprietary TMG matrix solver", "view-factor implementation", "vendor contact correlations"]
+      "not_replicated": ["proprietary TMG matrix solver", "view-factor implementation", "vendor contact correlations"],
+      "confidence_level": "low",
+      "confidence_basis": "降阶电热公式，未经 CAE 认证样本校验；接触电阻为本地标定项"
     },
     "PERF-02": {
       "formula_library": "rules/perf_formula_v2.json#PERF-02",
       "nx_role": "nonlinear surface contact solver and friction/penalty definitions",
       "local_components": ["Euler-Bernoulli reduced-order spring", "constant Coulomb friction"],
-      "not_replicated": ["NX nonlinear contact iteration", "contact search algorithm", "plasticity and wear models"]
+      "not_replicated": ["NX nonlinear contact iteration", "contact search algorithm", "plasticity and wear models"],
+      "confidence_level": "low",
+      "confidence_basis": "降阶悬臂梁+摩擦公式，未经 CAE 接触求解认证样本校验"
     }
   },
   "certification_policy": {

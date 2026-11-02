@@ -17,6 +17,18 @@ PERF-01、PERF-02 已从“树模型给一个数，再和阈值比较”改为�
 | `cae_solver` | 通过结果契约读取到具名求解器、版本、收敛状态和模型摘要匹配的结果 |
 | `formula` | 本地降阶公式筛查，不得对外宣称是 NX 求解结果 |
 
+逐规则置信度（落库位置：`rules/perf_formula_v2.json` 与
+`rules/nx_rule_evidence_v1.json` 的 `confidence_level` / `confidence_basis`；
+模型自身的 `source.confidence` 仍表示证据来源级别，两者不混用）：
+
+| 规则 | 置信度 | 依据 |
+|---|---|---|
+| PERF-01 载流–温升 | **low** | 降阶电热公式，未经 CAE 认证样本校验；接触电阻为本地标定项 |
+| PERF-02 插拔力 | **low** | 降阶悬臂梁 + 摩擦公式，未经 CAE 接触求解认证样本校验 |
+
+完成 CAE 认证（每项 ≥20 条正式授权样本、中位误差 ≤5%、判定一致率 ≥95%）后，
+才能把置信度升级为 medium/high；在此之前公式只作筛查值。
+
 截至 2026-10-30，本机已经安装并实际启动过 NX/Nastran/Thermal Flow：
 
 - NX Open 建模 journal 成功；

@@ -166,7 +166,9 @@ python -m nxdrp.checkers.performance.cae_batch certify --batch runtime/perf_cae_
 `unverified`、`cae_smoke`、`smoke_fixture` 和 evaluation 结果不具备生产认证资格；
 records 中混入 smoke 数据时，该文件不能用于 `certified` 结论。
 
-## 当前未完成的真实验收
+## 当前未完成的真实验收（本轮范围外，待现场/正式授权）
+
+> 本轮交付只覆盖代码、规则、文档与离线链路；以下 5 项属于现场验收，不阻塞本轮交付。
 
 1. 在正式授权 NX 2606 环境验证几何、材料、网格、接触、Solve 和结果 API；
 2. 工程师确认材料 TDS、实体及各边界面；

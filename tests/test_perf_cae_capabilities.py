@@ -160,5 +160,30 @@ class TestSolverEnvironment(unittest.TestCase):
             self.assertIn("nx_release_not_detected", {entry["code"] for entry in summary["not_done"]})
 
 
+class TestPerfRuleConfidence(unittest.TestCase):
+    def test_formula_models_declare_confidence(self):
+        import json
+
+        path = os.path.join(ROOT, "rules", "perf_formula_v2.json")
+        with open(path, encoding="utf-8") as fh:
+            library = json.load(fh)
+        for key, spec in library["models"].items():
+            with self.subTest(rule=key):
+                self.assertIn(spec.get("confidence_level"), {"high", "medium", "low"})
+                self.assertTrue(spec.get("confidence_basis"))
+
+    def test_evidence_mapping_mirrors_confidence(self):
+        import json
+
+        path = os.path.join(ROOT, "rules", "nx_rule_evidence_v1.json")
+        with open(path, encoding="utf-8") as fh:
+            evidence = json.load(fh)
+        for key in ("PERF-01", "PERF-02"):
+            with self.subTest(rule=key):
+                mapping = evidence["rule_mapping"][key]
+                self.assertIn(mapping.get("confidence_level"), {"high", "medium", "low"})
+                self.assertTrue(mapping.get("confidence_basis"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

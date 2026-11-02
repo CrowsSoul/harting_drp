@@ -1,0 +1,12 @@
+{
+  "entrypoint": "conductor.sim",
+  "solution": "ThermalSolution",
+  "parameters": {
+    "current_a": {
+      "file": "conductor.sim",
+      "expression": "current_a"
+    }
+  },
+  "result_type": "Temperature - Nodal",
+  "result_component": "Scalar"
+}
